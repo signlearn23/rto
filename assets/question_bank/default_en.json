@@ -1,0 +1,98 @@
+[
+  {
+    "id": "tn_en_001",
+    "topic": "Traffic Signs",
+    "question": "What does a red circular sign with a white horizontal bar mean?",
+    "options": ["No Entry", "No Parking", "No Horn", "Speed Limit"],
+    "correctIndex": 0,
+    "explanation": "A red circle with a white bar is the 'No Entry' mandatory sign."
+  },
+  {
+    "id": "tn_en_002",
+    "topic": "Traffic Signs",
+    "question": "A triangular sign with a red border generally indicates:",
+    "options": ["Mandatory instruction", "Cautionary/warning", "Informational", "No meaning"],
+    "correctIndex": 1,
+    "explanation": "Triangular signs with a red border are cautionary signs warning of hazards ahead."
+  },
+  {
+    "id": "tn_en_003",
+    "topic": "Road Rules",
+    "question": "On a two-way road without a divider, you should normally drive on which side?",
+    "options": ["Left side", "Right side", "Middle of the road", "Any side"],
+    "correctIndex": 0,
+    "explanation": "In India, vehicles keep to the left side of the road."
+  },
+  {
+    "id": "tn_en_004",
+    "topic": "Road Rules",
+    "question": "What is the minimum age to obtain a Learner's License for a motorcycle without gears (up to 50cc)?",
+    "options": ["14 years", "16 years", "18 years", "21 years"],
+    "correctIndex": 1,
+    "explanation": "16 years is the minimum age for gearless two-wheelers up to 50cc, with guardian consent."
+  },
+  {
+    "id": "tn_en_005",
+    "topic": "Signals",
+    "question": "A policeman stands with one arm raised vertically. What should drivers do?",
+    "options": ["Speed up", "Stop all traffic from all directions", "Turn left only", "Continue as usual"],
+    "correctIndex": 1,
+    "explanation": "A vertically raised arm by traffic police signals all vehicles to stop."
+  },
+  {
+    "id": "tn_en_006",
+    "topic": "Signals",
+    "question": "What does a flashing yellow traffic light mean?",
+    "options": ["Stop completely", "Proceed with caution", "Stop only for pedestrians", "No meaning"],
+    "correctIndex": 1,
+    "explanation": "A flashing yellow light means proceed with caution, no need to stop if the way is clear."
+  },
+  {
+    "id": "tn_en_007",
+    "topic": "Documents",
+    "question": "Which document is mandatory while driving a vehicle on Indian roads?",
+    "options": ["Aadhaar Card only", "Valid Driving License", "Voter ID only", "None required"],
+    "correctIndex": 1,
+    "explanation": "A valid Driving License (along with RC and insurance) is mandatory."
+  },
+  {
+    "id": "tn_en_008",
+    "topic": "Safety",
+    "question": "Wearing a seatbelt is mandatory for:",
+    "options": ["Only the driver", "Driver and front seat passenger", "Only rear passengers", "No one"],
+    "correctIndex": 1,
+    "explanation": "Under the Motor Vehicles Act, both driver and front seat passenger must wear seatbelts."
+  },
+  {
+    "id": "tn_en_009",
+    "topic": "Safety",
+    "question": "What is the legal blood alcohol limit for driving in India?",
+    "options": ["30mg/100ml", "80mg/100ml", "No limit", "150mg/100ml"],
+    "correctIndex": 0,
+    "explanation": "The permissible limit is 30mg of alcohol per 100ml of blood."
+  },
+  {
+    "id": "tn_en_010",
+    "topic": "Road Rules",
+    "question": "At an uncontrolled intersection, who has the right of way?",
+    "options": ["Vehicle on the left", "Vehicle on the right", "Larger vehicle", "Faster vehicle"],
+    "correctIndex": 1,
+    "explanation": "Generally, traffic coming from the right has the right of way at uncontrolled intersections."
+  },
+  {
+    "id": "tn_en_011",
+    "topic": "Traffic Signs",
+    "question": "A blue circular sign generally indicates:",
+    "options": ["Prohibition", "Mandatory instruction", "Warning", "Tourist spot"],
+    "correctIndex": 1,
+    "explanation": "Blue circular signs indicate mandatory instructions, like 'Compulsory turn left'."
+  },
+  {
+    "id": "tn_en_012",
+    "topic": "Documents",
+    "question": "Third-party insurance for a vehicle is:",
+    "options": ["Optional", "Mandatory by law", "Only for commercial vehicles", "Not required for two-wheelers"],
+    "correctIndex": 1,
+    "explanation": "Third-party insurance is legally mandatory for all vehicles plying on public roads."
+  }
+]
