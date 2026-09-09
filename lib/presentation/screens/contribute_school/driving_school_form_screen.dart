@@ -94,7 +94,7 @@ class _DrivingSchoolFormScreenState extends State<DrivingSchoolFormScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _type,
+              value: _type,
               decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()),
               items: const ['Car', 'Bike', 'Both']
                   .map((t) => DropdownMenuItem(value: t, child: Text(t)))
