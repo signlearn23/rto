@@ -99,7 +99,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.share_rounded),
             title: const Text('Share App'),
-            onTap: () => SharePlus.instance.share(ShareParams(text: AppConstants.shareText)),
+            onTap: () => Share.share(AppConstants.shareText),
           ),
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
