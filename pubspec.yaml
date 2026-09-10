@@ -31,6 +31,6 @@ flutter:
   assets:
     - assets/question_bank/
     - assets/images/
-    - assets/animations/
+    - assets/animation/
     - assets/images/logo.png     (placeholder, from the same icon)
-    - assets/animations/.gitkeep (keeps the empty folder tracked in git)
+    - assets/animation/.gitkeep (keeps the empty folder tracked in git)
