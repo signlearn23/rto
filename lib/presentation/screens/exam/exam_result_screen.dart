@@ -12,40 +12,106 @@ class ExamResultScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final passed = attempt.passed;
+    final color = passed ? AppColors.success : AppColors.danger;
+    final percent = attempt.totalQuestions == 0
+        ? 0.0
+        : attempt.correctAnswers / attempt.totalQuestions;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Exam Result'), automaticallyImplyLeading: false),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Center(
+          // ---- Hero score card ----
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
             child: Column(
               children: [
+                Text(
+                  passed ? 'PASSED' : 'NOT PASSED',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.5,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 160,
+                        height: 160,
+                        child: CircularProgressIndicator(
+                          value: percent,
+                          strokeWidth: 12,
+                          backgroundColor: color.withOpacity(0.15),
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                        ),
+                      ),
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${attempt.correctAnswers}/${attempt.totalQuestions}',
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                          ),
+                          Text(
+                            '${(percent * 100).round()}%',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: color.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
                 Icon(
                   passed ? Icons.emoji_events_rounded : Icons.replay_circle_filled_rounded,
-                  size: 72,
-                  color: passed ? AppColors.success : AppColors.danger,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  passed ? 'You Passed!' : 'Not Passed',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: passed ? AppColors.success : AppColors.danger,
-                  ),
+                  size: 36,
+                  color: color,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${attempt.correctAnswers} / ${attempt.totalQuestions} correct '
-                  '(need ${AppConstants.passMarkOutOf10}/${AppConstants.questionsPerExam} to pass)',
-                  style: const TextStyle(color: Colors.grey),
+                  passed ? 'You Passed!' : 'Not Passed',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
                 ),
-                Text('Time taken: ${attempt.timeTakenSeconds}s',
-                    style: const TextStyle(color: Colors.grey)),
+                const SizedBox(height: 12),
+                Text(
+                  'Passing score: ${AppConstants.passMarkOutOf10}/${AppConstants.questionsPerExam}',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
+                Text(
+                  'Time taken: ${attempt.timeTakenSeconds}s',
+                  style: const TextStyle(color: Colors.grey, fontSize: 13),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 28),
           const Text('Review Answers', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 12),
           ...attempt.questionResults.asMap().entries.map((entry) {
