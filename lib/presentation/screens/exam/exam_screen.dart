@@ -20,10 +20,8 @@ class _ExamScreenState extends State<ExamScreen> {
   late final ExamProvider _examProvider;
   bool _checking = true;
 
-  int? _selected;   // option the user has tapped (not yet confirmed)
-  bool _locked = false;  // true once Next/timeout has evaluated the answer
-  bool _timedOut = false;
-  bool _advancing = false; // guards against double-tap during the reveal delay
+  int? _selected; // freely changeable until Next is pressed
+  bool _advancing = false; // guards against double-tap on Next
 
   int _correctCount = 0;
   int _wrongCount = 0;
@@ -67,45 +65,35 @@ class _ExamScreenState extends State<ExamScreen> {
     );
   }
 
-  /// Tapping an option just selects it — no reveal, timer keeps running.
-  /// User can change their pick as many times as they want before Next.
+  /// Freely change selection any number of times — nothing is scored yet.
   void _onSelectOption(int index) {
-    if (_locked) return;
+    if (_advancing) return;
     setState(() => _selected = index);
   }
 
-  /// Timer ran out with nothing (or something) selected — lock in immediately.
-  void _onTimeout(int correctIndex) {
-    if (_locked || _advancing) return;
-    setState(() {
-      _locked = true;
-      _timedOut = true;
-      _wrongCount++;
-    });
-    _scheduleAdvance();
-  }
-
-  /// User pressed Next: this is the moment the answer is scored.
-  void _confirmAnswer(int correctIndex) {
-    if (_locked || _selected == null) return;
-    setState(() {
-      _locked = true;
-      if (_selected == correctIndex) {
-        _correctCount++;
-      } else {
-        _wrongCount++;
-      }
-    });
-    _scheduleAdvance();
-  }
-
-  void _scheduleAdvance() {
+  /// Timer ran out — lock in as wrong (no selection to give credit for)
+  /// and move on immediately, no reveal.
+  void _onTimeout() {
+    if (_advancing) return;
     _advancing = true;
-    Future.delayed(const Duration(milliseconds: 500), _goToNext);
+    _wrongCount++;
+    _goToNext(timedOut: true);
   }
 
-  Future<void> _goToNext() async {
-    await _examProvider.submitAnswer(_selected, timedOut: _timedOut);
+  /// Next pressed: this is the only place an answer is evaluated.
+  void _onNext(int correctIndex) {
+    if (_advancing || _selected == null) return;
+    _advancing = true;
+    if (_selected == correctIndex) {
+      _correctCount++;
+    } else {
+      _wrongCount++;
+    }
+    _goToNext(timedOut: false);
+  }
+
+  Future<void> _goToNext({required bool timedOut}) async {
+    await _examProvider.submitAnswer(_selected, timedOut: timedOut);
     if (_examProvider.status == ExamStatus.finished) {
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -116,8 +104,6 @@ class _ExamScreenState extends State<ExamScreen> {
     if (!mounted) return;
     setState(() {
       _selected = null;
-      _locked = false;
-      _timedOut = false;
       _advancing = false;
     });
   }
@@ -155,96 +141,122 @@ class _ExamScreenState extends State<ExamScreen> {
               if (leave == true && context.mounted) Navigator.of(context).pop();
             },
             child: Scaffold(
+              backgroundColor: colorScheme.surfaceVariant.withOpacity(0.3),
               appBar: AppBar(
-                title: Text('Question ${exam.currentQuestionNumber}/${exam.totalQuestions}'),
+                title: const Text('Exam'),
                 automaticallyImplyLeading: false,
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16),
+                    child: Center(
+                      child: Row(
+                        children: [
+                          Text(
+                            '${exam.currentQuestionNumber}/${exam.totalQuestions}',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(width: 10),
+                          QuestionTimer(
+                            key: ValueKey(exam.currentQuestionNumber),
+                            resetKey: ValueKey(exam.currentQuestionNumber),
+                            seconds: AppConstants.secondsPerQuestion,
+                            onTimeout: _onTimeout,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
               body: SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.all(16),
                         children: [
-                          Expanded(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: LinearProgressIndicator(
-                                value: exam.currentQuestionNumber / exam.totalQuestions,
-                                minHeight: 6,
-                                backgroundColor: colorScheme.surfaceVariant,
-                              ),
+                          // ---- Question card ----
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              'Q. ${q.question}',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          // Timer keeps running through selection; only stops
-                          // once the answer is locked (Next pressed or timeout).
-                          if (!_locked)
-                            QuestionTimer(
-                              key: ValueKey(exam.currentQuestionNumber),
-                              resetKey: ValueKey(exam.currentQuestionNumber),
-                              seconds: AppConstants.secondsPerQuestion,
-                              onTimeout: () => _onTimeout(q.correctIndex),
+                          const SizedBox(height: 2),
+                          // ---- Options card ----
+                          Container(
+                            decoration: BoxDecoration(
+                              color: colorScheme.surface,
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
                             ),
+                            child: Column(
+                              children: List.generate(q.options.length, (i) {
+                                final isLast = i == q.options.length - 1;
+                                return _OptionRow(
+                                  number: i + 1,
+                                  text: q.options[i],
+                                  selected: _selected == i,
+                                  showDivider: !isLast,
+                                  onTap: () => _onSelectOption(i),
+                                );
+                              }),
+                            ),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      Text(
-                        q.question,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 20),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: q.options.length,
-                          itemBuilder: (context, i) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _OptionTile(
-                                text: q.options[i],
-                                state: _optionState(i, q.correctIndex),
-                                onTap: _locked ? null : () => _onSelectOption(i),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      if (_timedOut)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            "Time's up! The correct answer is highlighted above.",
-                            style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600),
+                    ),
+                    // ---- Bottom bar: score chips + Next ----
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 8,
+                            offset: const Offset(0, -2),
                           ),
-                        ),
-                      // Score indicator sits beside the Next button.
-                      Row(
-                        children: [
-                          _ScoreChip(icon: Icons.check_circle, color: AppColors.success, count: _correctCount),
-                          const SizedBox(width: 8),
-                          _ScoreChip(icon: Icons.cancel, color: AppColors.danger, count: _wrongCount),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: (_selected != null && !_locked)
-                                  ? () => _confirmAnswer(q.correctIndex)
+                        ],
+                      ),
+                      child: SafeArea(
+                        top: false,
+                        child: Row(
+                          children: [
+                            _ScorePill(icon: Icons.check, color: AppColors.success, count: _correctCount),
+                            const SizedBox(width: 8),
+                            _ScorePill(icon: Icons.close, color: AppColors.danger, count: _wrongCount),
+                            const Spacer(),
+                            ElevatedButton.icon(
+                              onPressed: _selected != null && !_advancing
+                                  ? () => _onNext(q.correctIndex)
                                   : null,
                               style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
-                              child: Text(
-                                exam.currentQuestionNumber == exam.totalQuestions ? 'Finish' : 'Next',
+                              label: Text(
+                                exam.currentQuestionNumber == exam.totalQuestions
+                                    ? 'Finish'
+                                    : 'Next Question',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
+                              icon: const Icon(Icons.arrow_forward, size: 18),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -253,107 +265,101 @@ class _ExamScreenState extends State<ExamScreen> {
       ),
     );
   }
-
-  _OptionVisualState _optionState(int index, int correctIndex) {
-    if (!_locked) {
-      return _selected == index ? _OptionVisualState.selected : _OptionVisualState.idle;
-    }
-    if (index == correctIndex) return _OptionVisualState.correct;
-    if (index == _selected) return _OptionVisualState.wrong;
-    return _OptionVisualState.dimmed;
-  }
 }
 
-enum _OptionVisualState { idle, selected, correct, wrong, dimmed }
-
-class _OptionTile extends StatelessWidget {
+class _OptionRow extends StatelessWidget {
+  final int number;
   final String text;
-  final _OptionVisualState state;
-  final VoidCallback? onTap;
+  final bool selected;
+  final bool showDivider;
+  final VoidCallback onTap;
 
-  const _OptionTile({required this.text, required this.state, required this.onTap});
+  const _OptionRow({
+    required this.number,
+    required this.text,
+    required this.selected,
+    required this.showDivider,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    Color borderColor = colorScheme.outline;
-    Color? fillColor;
-    Color textColor = colorScheme.onSurface;
-    double borderWidth = 1;
-    Widget? trailingIcon;
-
-    switch (state) {
-      case _OptionVisualState.idle:
-        break;
-      case _OptionVisualState.selected:
-        borderColor = colorScheme.primary;
-        fillColor = colorScheme.primary.withOpacity(0.14);
-        borderWidth = 1.5;
-        break;
-      case _OptionVisualState.correct:
-        borderColor = AppColors.success;
-        fillColor = AppColors.success.withOpacity(0.14);
-        textColor = AppColors.success;
-        borderWidth = 1.5;
-        trailingIcon = Icon(Icons.check_circle, color: AppColors.success, size: 20);
-        break;
-      case _OptionVisualState.wrong:
-        borderColor = AppColors.danger;
-        fillColor = AppColors.danger.withOpacity(0.12);
-        textColor = AppColors.danger;
-        borderWidth = 1.5;
-        trailingIcon = Icon(Icons.cancel, color: AppColors.danger, size: 20);
-        break;
-      case _OptionVisualState.dimmed:
-        textColor = colorScheme.onSurface.withOpacity(0.4);
-        borderColor = colorScheme.outline.withOpacity(0.4);
-        break;
-    }
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: fillColor,
-          border: Border.all(color: borderColor, width: borderWidth),
-          borderRadius: BorderRadius.circular(12),
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            color: selected ? colorScheme.primary.withOpacity(0.14) : Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected ? colorScheme.primary : colorScheme.outline,
+                      width: 1.5,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$number',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: selected ? colorScheme.primary : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      color: selected ? colorScheme.primary : colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        child: Row(
-          children: [
-            Expanded(child: Text(text, style: TextStyle(color: textColor))),
-            if (trailingIcon != null) trailingIcon,
-          ],
-        ),
-      ),
+        if (showDivider) Divider(height: 1, color: colorScheme.outlineVariant),
+      ],
     );
   }
 }
 
-class _ScoreChip extends StatelessWidget {
+class _ScorePill extends StatelessWidget {
   final IconData icon;
   final Color color;
   final int count;
 
-  const _ScoreChip({required this.icon, required this.color, required this.count});
+  const _ScorePill({required this.icon, required this.color, required this.count});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(12),
+        color: color,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 4),
-          Text('$count', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+          Icon(icon, size: 16, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            '$count',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
         ],
       ),
     );
