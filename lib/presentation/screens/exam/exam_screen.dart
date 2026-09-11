@@ -20,8 +20,8 @@ class _ExamScreenState extends State<ExamScreen> {
   late final ExamProvider _examProvider;
   bool _checking = true;
 
-  int? _selected; // freely changeable until Next is pressed
-  bool _advancing = false; // guards against double-tap on Next
+  int? _selected;
+  bool _advancing = false;
 
   int _correctCount = 0;
   int _wrongCount = 0;
@@ -58,21 +58,18 @@ class _ExamScreenState extends State<ExamScreen> {
           _checkCreditsAndStart();
         },
         onCancel: () {
-          Navigator.of(context).pop(); // close sheet
-          Navigator.of(context).pop(); // leave exam screen
+          Navigator.of(context).pop();
+          Navigator.of(context).pop();
         },
       ),
     );
   }
 
-  /// Freely change selection any number of times — nothing is scored yet.
   void _onSelectOption(int index) {
     if (_advancing) return;
     setState(() => _selected = index);
   }
 
-  /// Timer ran out — lock in as wrong (no selection to give credit for)
-  /// and move on immediately, no reveal.
   void _onTimeout() {
     if (_advancing) return;
     _advancing = true;
@@ -80,7 +77,6 @@ class _ExamScreenState extends State<ExamScreen> {
     _goToNext(timedOut: true);
   }
 
-  /// Next pressed: this is the only place an answer is evaluated.
   void _onNext(int correctIndex) {
     if (_advancing || _selected == null) return;
     _advancing = true;
@@ -141,7 +137,9 @@ class _ExamScreenState extends State<ExamScreen> {
               if (leave == true && context.mounted) Navigator.of(context).pop();
             },
             child: Scaffold(
-              backgroundColor: colorScheme.surfaceVariant.withOpacity(0.3),
+              // Use theme surface, not a hardcoded/mismatched tone —
+              // this is what fixes the muddy gray in dark mode.
+              backgroundColor: colorScheme.surface,
               appBar: AppBar(
                 title: const Text('Exam'),
                 automaticallyImplyLeading: false,
@@ -171,56 +169,80 @@ class _ExamScreenState extends State<ExamScreen> {
               body: SafeArea(
                 child: Column(
                   children: [
+                    // Centered content instead of top-pinned with dead
+                    // space below — fills the available area cleanly
+                    // and still scrolls if the question is long.
                     Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          // ---- Question card ----
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: BorderRadius.circular(16),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // ---- Question card ----
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surfaceContainerHigh,
+                                        borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(16),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'Q. ${q.question}',
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              color: colorScheme.onSurface,
+                                            ),
+                                      ),
+                                    ),
+                                    Container(
+                                      height: 1,
+                                      color: colorScheme.outlineVariant,
+                                    ),
+                                    // ---- Options card ----
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surfaceContainerHigh,
+                                        borderRadius: const BorderRadius.vertical(
+                                          bottom: Radius.circular(16),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        children: List.generate(q.options.length, (i) {
+                                          final isLast = i == q.options.length - 1;
+                                          return _OptionRow(
+                                            number: i + 1,
+                                            text: q.options[i],
+                                            selected: _selected == i,
+                                            showDivider: !isLast,
+                                            onTap: () => _onSelectOption(i),
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child: Text(
-                              'Q. ${q.question}',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          // ---- Options card ----
-                          Container(
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                            ),
-                            child: Column(
-                              children: List.generate(q.options.length, (i) {
-                                final isLast = i == q.options.length - 1;
-                                return _OptionRow(
-                                  number: i + 1,
-                                  text: q.options[i],
-                                  selected: _selected == i,
-                                  showDivider: !isLast,
-                                  onTap: () => _onSelectOption(i),
-                                );
-                              }),
-                            ),
-                          ),
-                        ],
+                          );
+                        },
                       ),
                     ),
                     // ---- Bottom bar: score chips + Next ----
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                       decoration: BoxDecoration(
-                        color: colorScheme.surface,
+                        color: colorScheme.surfaceContainerHigh,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.06),
+                            color: Colors.black.withOpacity(0.15),
                             blurRadius: 8,
                             offset: const Offset(0, -2),
                           ),
@@ -292,7 +314,7 @@ class _OptionRow extends StatelessWidget {
           onTap: onTap,
           child: Container(
             width: double.infinity,
-            color: selected ? colorScheme.primary.withOpacity(0.14) : Colors.transparent,
+            color: selected ? colorScheme.primary.withOpacity(0.16) : Colors.transparent,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             child: Row(
               children: [
@@ -366,17 +388,12 @@ class _ScorePill extends StatelessWidget {
   }
 }
 
-/// Shown when the user has no exam attempts left. They watch a rewarded ad
-/// to earn +1 credit, or buy Remove Ads for unlimited attempts.
 class _RewardedAdGateSheet extends StatelessWidget {
   final VoidCallback onCreditEarned;
   final VoidCallback onCancel;
 
   const _RewardedAdGateSheet({required this.onCreditEarned, required this.onCancel});
 
-  /// TODO: replace with a real RewardedAd.load(...).show(...) call using
-  /// google_mobile_ads and AppConstants.rewardedAdUnitId. This stub simulates
-  /// the reward being earned after a short delay so the flow is testable.
   Future<void> _watchAd(BuildContext context) async {
     showDialog(
       context: context,
@@ -393,7 +410,7 @@ class _RewardedAdGateSheet extends StatelessWidget {
     );
     await Future.delayed(const Duration(seconds: 2));
     if (!context.mounted) return;
-    Navigator.of(context).pop(); // close loading dialog
+    Navigator.of(context).pop();
     await context.read<AppStateProvider>().addExamCreditFromAd();
     onCreditEarned();
   }
