@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/widgets/question_timer_widget.dart';
 import '../../../data/repositories/question_repository.dart';
@@ -19,9 +20,10 @@ class _ExamScreenState extends State<ExamScreen> {
   late final ExamProvider _examProvider;
   bool _checking = true;
 
-  int? _selected;
-  bool _answered = false;
+  int? _selected;   // option the user has tapped (not yet confirmed)
+  bool _locked = false;  // true once Next/timeout has evaluated the answer
   bool _timedOut = false;
+  bool _advancing = false; // guards against double-tap during the reveal delay
 
   int _correctCount = 0;
   int _wrongCount = 0;
@@ -65,32 +67,43 @@ class _ExamScreenState extends State<ExamScreen> {
     );
   }
 
-  /// Called the moment the user taps an option. Just reveals right/wrong —
-  /// does NOT submit or advance yet.
-  void _onSelectOption(int index, int correctIndex) {
-    if (_answered) return;
+  /// Tapping an option just selects it — no reveal, timer keeps running.
+  /// User can change their pick as many times as they want before Next.
+  void _onSelectOption(int index) {
+    if (_locked) return;
+    setState(() => _selected = index);
+  }
+
+  /// Timer ran out with nothing (or something) selected — lock in immediately.
+  void _onTimeout(int correctIndex) {
+    if (_locked || _advancing) return;
     setState(() {
-      _selected = index;
-      _answered = true;
-      if (index == correctIndex) {
+      _locked = true;
+      _timedOut = true;
+      _wrongCount++;
+    });
+    _scheduleAdvance();
+  }
+
+  /// User pressed Next: this is the moment the answer is scored.
+  void _confirmAnswer(int correctIndex) {
+    if (_locked || _selected == null) return;
+    setState(() {
+      _locked = true;
+      if (_selected == correctIndex) {
         _correctCount++;
       } else {
         _wrongCount++;
       }
     });
+    _scheduleAdvance();
   }
 
-  /// Called when the timer runs out with nothing selected.
-  void _onTimeout(int correctIndex) {
-    if (_answered) return;
-    setState(() {
-      _answered = true;
-      _timedOut = true;
-      _wrongCount++;
-    });
+  void _scheduleAdvance() {
+    _advancing = true;
+    Future.delayed(const Duration(milliseconds: 500), _goToNext);
   }
 
-  /// Called when the user taps "Next".
   Future<void> _goToNext() async {
     await _examProvider.submitAnswer(_selected, timedOut: _timedOut);
     if (_examProvider.status == ExamStatus.finished) {
@@ -100,10 +113,12 @@ class _ExamScreenState extends State<ExamScreen> {
       ));
       return;
     }
+    if (!mounted) return;
     setState(() {
       _selected = null;
-      _answered = false;
+      _locked = false;
       _timedOut = false;
+      _advancing = false;
     });
   }
 
@@ -112,6 +127,8 @@ class _ExamScreenState extends State<ExamScreen> {
     if (_checking) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    final colorScheme = Theme.of(context).colorScheme;
+
     return ChangeNotifierProvider.value(
       value: _examProvider,
       child: Consumer<ExamProvider>(
@@ -141,79 +158,93 @@ class _ExamScreenState extends State<ExamScreen> {
               appBar: AppBar(
                 title: Text('Question ${exam.currentQuestionNumber}/${exam.totalQuestions}'),
                 automaticallyImplyLeading: false,
-                actions: [
-                  _ScoreChip(icon: Icons.check_circle, color: Colors.green, count: _correctCount),
-                  const SizedBox(width: 8),
-                  _ScoreChip(icon: Icons.cancel, color: Colors.red, count: _wrongCount),
-                  const SizedBox(width: 12),
-                ],
               ),
-              body: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
-                              value: exam.currentQuestionNumber / exam.totalQuestions,
-                              minHeight: 6,
+              body: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: LinearProgressIndicator(
+                                value: exam.currentQuestionNumber / exam.totalQuestions,
+                                minHeight: 6,
+                                backgroundColor: colorScheme.surfaceVariant,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 16),
-                        if (!_answered)
-                          QuestionTimer(
-                            key: ValueKey(exam.currentQuestionNumber),
-                            resetKey: ValueKey(exam.currentQuestionNumber),
-                            seconds: AppConstants.secondsPerQuestion,
-                            onTimeout: () => _onTimeout(q.correctIndex),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Text(q.question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: q.options.length,
-                        itemBuilder: (context, i) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _OptionTile(
-                              text: q.options[i],
-                              state: _optionState(i, q.correctIndex),
-                              onTap: _answered ? null : () => _onSelectOption(i, q.correctIndex),
+                          const SizedBox(width: 16),
+                          // Timer keeps running through selection; only stops
+                          // once the answer is locked (Next pressed or timeout).
+                          if (!_locked)
+                            QuestionTimer(
+                              key: ValueKey(exam.currentQuestionNumber),
+                              resetKey: ValueKey(exam.currentQuestionNumber),
+                              seconds: AppConstants.secondsPerQuestion,
+                              onTimeout: () => _onTimeout(q.correctIndex),
                             ),
-                          );
-                        },
+                        ],
                       ),
-                    ),
-                    if (_timedOut)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 8),
-                        child: Text(
-                          "Time's up! The correct answer is highlighted above.",
-                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+                      const SizedBox(height: 24),
+                      Text(
+                        q.question,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: q.options.length,
+                          itemBuilder: (context, i) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _OptionTile(
+                                text: q.options[i],
+                                state: _optionState(i, q.correctIndex),
+                                onTap: _locked ? null : () => _onSelectOption(i),
+                              ),
+                            );
+                          },
                         ),
                       ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _answered ? _goToNext : null,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                      if (_timedOut)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            "Time's up! The correct answer is highlighted above.",
+                            style: TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600),
+                          ),
                         ),
-                        child: Text(
-                          exam.currentQuestionNumber == exam.totalQuestions ? 'Finish' : 'Next',
-                        ),
+                      // Score indicator sits beside the Next button.
+                      Row(
+                        children: [
+                          _ScoreChip(icon: Icons.check_circle, color: AppColors.success, count: _correctCount),
+                          const SizedBox(width: 8),
+                          _ScoreChip(icon: Icons.cancel, color: AppColors.danger, count: _wrongCount),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: (_selected != null && !_locked)
+                                  ? () => _confirmAnswer(q.correctIndex)
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                              child: Text(
+                                exam.currentQuestionNumber == exam.totalQuestions ? 'Finish' : 'Next',
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -224,7 +255,7 @@ class _ExamScreenState extends State<ExamScreen> {
   }
 
   _OptionVisualState _optionState(int index, int correctIndex) {
-    if (!_answered) {
+    if (!_locked) {
       return _selected == index ? _OptionVisualState.selected : _OptionVisualState.idle;
     }
     if (index == correctIndex) return _OptionVisualState.correct;
@@ -244,34 +275,39 @@ class _OptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    Color borderColor = Colors.grey.shade300;
+    Color borderColor = colorScheme.outline;
     Color? fillColor;
-    Color textColor = Colors.black87;
+    Color textColor = colorScheme.onSurface;
+    double borderWidth = 1;
     Widget? trailingIcon;
 
     switch (state) {
       case _OptionVisualState.idle:
         break;
       case _OptionVisualState.selected:
-        borderColor = primary;
-        fillColor = primary.withOpacity(0.12);
+        borderColor = colorScheme.primary;
+        fillColor = colorScheme.primary.withOpacity(0.14);
+        borderWidth = 1.5;
         break;
       case _OptionVisualState.correct:
-        borderColor = Colors.green;
-        fillColor = Colors.green.withOpacity(0.12);
-        textColor = Colors.green.shade800;
-        trailingIcon = const Icon(Icons.check_circle, color: Colors.green, size: 20);
+        borderColor = AppColors.success;
+        fillColor = AppColors.success.withOpacity(0.14);
+        textColor = AppColors.success;
+        borderWidth = 1.5;
+        trailingIcon = Icon(Icons.check_circle, color: AppColors.success, size: 20);
         break;
       case _OptionVisualState.wrong:
-        borderColor = Colors.red;
-        fillColor = Colors.red.withOpacity(0.10);
-        textColor = Colors.red.shade800;
-        trailingIcon = const Icon(Icons.cancel, color: Colors.red, size: 20);
+        borderColor = AppColors.danger;
+        fillColor = AppColors.danger.withOpacity(0.12);
+        textColor = AppColors.danger;
+        borderWidth = 1.5;
+        trailingIcon = Icon(Icons.cancel, color: AppColors.danger, size: 20);
         break;
       case _OptionVisualState.dimmed:
-        textColor = Colors.grey.shade500;
+        textColor = colorScheme.onSurface.withOpacity(0.4);
+        borderColor = colorScheme.outline.withOpacity(0.4);
         break;
     }
 
@@ -283,7 +319,7 @@ class _OptionTile extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: fillColor,
-          border: Border.all(color: borderColor, width: state == _OptionVisualState.idle ? 1 : 1.5),
+          border: Border.all(color: borderColor, width: borderWidth),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -307,10 +343,10 @@ class _ScoreChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
+        color: color.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -369,10 +405,10 @@ class _RewardedAdGateSheet extends StatelessWidget {
             const Text('No Exam Attempts Left',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "You've used your free exam attempt. Watch a short ad to get 1 more attempt.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 20),
             SizedBox(
