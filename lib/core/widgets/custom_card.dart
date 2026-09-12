@@ -8,6 +8,7 @@ class FeatureCard extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final String? badge;
+  final IconData? badgeIcon;
 
   const FeatureCard({
     super.key,
@@ -17,6 +18,7 @@ class FeatureCard extends StatelessWidget {
     required this.color,
     required this.onTap,
     this.badge,
+    this.badgeIcon,
   });
 
   @override
@@ -60,9 +62,18 @@ class FeatureCard extends StatelessWidget {
                       color: color,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(badge!,
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (badgeIcon != null) ...[
+                          Icon(badgeIcon, size: 12, color: Colors.white),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(badge!,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                 ),
             ],
