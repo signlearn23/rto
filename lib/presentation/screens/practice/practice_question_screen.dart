@@ -20,6 +20,10 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
   int? _selected;
   bool _loading = true;
   int _correct = 0;
+  // QuestionModel now stores question/options/explanation per language
+  // (Map<String,...>) instead of a flat String/List<String>, so we keep
+  // track of the selected language and read through it everywhere below.
+  String _lang = 'en';
 
   @override
   void initState() {
@@ -34,6 +38,7 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
       languageCode: appState.selectedLanguage ?? 'en',
     );
     setState(() {
+      _lang = appState.selectedLanguage ?? 'en';
       _questions = grouped[widget.topic] ?? [];
       _loading = false;
     });
@@ -85,6 +90,8 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
       );
     }
     final q = _questions[_index];
+    final options = q.optionsFor(_lang);
+    final explanation = q.explanationText(_lang);
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.topic)),
@@ -98,9 +105,9 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
             Text('Question ${_index + 1} of ${_questions.length}',
                 style: const TextStyle(color: Colors.grey)),
             const SizedBox(height: 16),
-            Text(q.question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            Text(q.questionText(_lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(height: 20),
-            ...List.generate(q.options.length, (i) {
+            ...List.generate(options.length, (i) {
               final isSelected = _selected == i;
               final isCorrect = i == q.correctIndex;
               Color? color;
@@ -125,7 +132,7 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
                     ),
                     child: Row(
                       children: [
-                        Expanded(child: Text(q.options[i])),
+                        Expanded(child: Text(options[i])),
                         if (_selected != null && isCorrect)
                           const Icon(Icons.check_circle, color: Colors.green),
                         if (_selected != null && isSelected && !isCorrect)
@@ -136,10 +143,10 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
                 ),
               );
             }),
-            if (_selected != null && q.explanation != null)
+            if (_selected != null && explanation != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4, bottom: 12),
-                child: Text('💡 ${q.explanation}', style: TextStyle(color: Colors.grey.shade700)),
+                child: Text('💡 $explanation', style: TextStyle(color: Colors.grey.shade700)),
               ),
             const Spacer(),
             SizedBox(
