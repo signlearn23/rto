@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-import '../core/app_constants.dart';
+import '../constants/app_constants.dart';
 
 class AdBanner extends StatefulWidget {
   const AdBanner({super.key});
