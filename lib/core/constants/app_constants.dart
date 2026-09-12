@@ -12,7 +12,7 @@ class AppConstants {
   static const String removeAdsPriceLabel = '₹39';
 
   // AdMob - TEST IDs (Google public test units). Replace before release.
-  static const String bannerAdUnitId = 'ca-app-pub-3699335518824613/7601380696';
+  static const String bannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
   static const String rewardedAdUnitId = 'ca-app-pub-3699335518824613/8171531808';
 
   // Hive box names
