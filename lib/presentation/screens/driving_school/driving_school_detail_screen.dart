@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/gestures.dart';
 import '../../../core/widgets/ad_banner.dart';
 import '../../../data/models/driving_school_model.dart';
 import '../../providers/app_state_provider.dart';
