@@ -13,7 +13,7 @@ import '../result_history/result_history_screen.dart';
 import '../settings/settings_screen.dart';
 import '../remove_ads/remove_ads_screen.dart';
 import '../driving_school/driving_school_list_screen.dart';
-import '../language/language_picker_dialog.dart';
+import '../../../core/widgets/language_picker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Change language',
             onPressed: () => showDialog(
               context: context,
-              builder: (_) => const LanguagePickerDialog(),
+              builder: (_) => const showLanguagePicker(),
             ),
           ),
           IconButton(
