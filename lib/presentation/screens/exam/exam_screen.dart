@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
@@ -41,6 +42,7 @@ class _ExamScreenState extends State<ExamScreen> {
         stateCode: appState.selectedState ?? 'tamilnadu',
         languageCode: appState.selectedLanguage ?? 'en',
       );
+      if (!mounted) return;
       setState(() => _checking = false);
     } else {
       _showAdGate();
@@ -52,15 +54,24 @@ class _ExamScreenState extends State<ExamScreen> {
       context: context,
       isDismissible: false,
       enableDrag: false,
-      builder: (_) => _RewardedAdGateSheet(
-        onCreditEarned: () {
-          Navigator.of(context).pop();
-          _checkCreditsAndStart();
-        },
-        onCancel: () {
-          Navigator.of(context).pop();
-          Navigator.of(context).pop();
-        },
+      // PopScope blocks the Android/gesture back button from tearing the
+      // sheet down mid-flow (isDismissible:false alone does NOT do this â€”
+      // it only blocks tap-outside-to-close). Without this, back-press
+      // during the ad flow was popping the wrong route later on and
+      // leaving a stray loading screen behind.
+      builder: (_) => PopScope(
+        canPop: false,
+        child: _RewardedAdGateSheet(
+          onCreditEarned: () {
+            if (!context.mounted) return;
+            Navigator.of(context).pop();
+            _checkCreditsAndStart();
+          },
+          onCancel: () {
+            Navigator.of(context).pop();
+            Navigator.of(context).pop();
+          },
+        ),
       ),
     );
   }
@@ -137,8 +148,6 @@ class _ExamScreenState extends State<ExamScreen> {
               if (leave == true && context.mounted) Navigator.of(context).pop();
             },
             child: Scaffold(
-              // Use theme surface, not a hardcoded/mismatched tone —
-              // this is what fixes the muddy gray in dark mode.
               backgroundColor: colorScheme.surface,
               appBar: AppBar(
                 title: const Text('Exam'),
@@ -169,9 +178,6 @@ class _ExamScreenState extends State<ExamScreen> {
               body: SafeArea(
                 child: Column(
                   children: [
-                    // Centered content instead of top-pinned with dead
-                    // space below — fills the available area cleanly
-                    // and still scrolls if the question is long.
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
@@ -184,7 +190,6 @@ class _ExamScreenState extends State<ExamScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // ---- Question card ----
                                     Container(
                                       width: double.infinity,
                                       padding: const EdgeInsets.all(20),
@@ -206,7 +211,6 @@ class _ExamScreenState extends State<ExamScreen> {
                                       height: 1,
                                       color: colorScheme.outlineVariant,
                                     ),
-                                    // ---- Options card ----
                                     Container(
                                       decoration: BoxDecoration(
                                         color: colorScheme.surfaceContainerHigh,
@@ -235,7 +239,6 @@ class _ExamScreenState extends State<ExamScreen> {
                         },
                       ),
                     ),
-                    // ---- Bottom bar: score chips + Next ----
                     Container(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                       decoration: BoxDecoration(
@@ -388,72 +391,279 @@ class _ScorePill extends StatelessWidget {
   }
 }
 
-class _RewardedAdGateSheet extends StatelessWidget {
+/// ---------------------------------------------------------------------
+/// Ad-gate bottom sheet.
+///
+/// Two things changed from the old version:
+/// 1. Real AdMob rewarded-ad flow (RewardedAd.load / show) instead of a
+///    fake 2-second delay. Reward is only granted from onUserEarnedReward.
+/// 2. Every intermediate dialog is wrapped in PopScope(canPop: false) so a
+///    back-press mid-flow can't leave the sheet or ExamScreen in a stuck
+///    "still loading" state.
+/// ---------------------------------------------------------------------
+class _RewardedAdGateSheet extends StatefulWidget {
   final VoidCallback onCreditEarned;
   final VoidCallback onCancel;
 
   const _RewardedAdGateSheet({required this.onCreditEarned, required this.onCancel});
 
-  Future<void> _watchAd(BuildContext context) async {
+  @override
+  State<_RewardedAdGateSheet> createState() => _RewardedAdGateSheetState();
+}
+
+class _RewardedAdGateSheetState extends State<_RewardedAdGateSheet> {
+  bool _loadingAd = false;
+
+  Future<void> _watchAd() async {
+    if (_loadingAd) return;
+    setState(() => _loadingAd = true);
+
+    bool loadingDialogOpen = true;
+
+    // Non-cancellable loading dialog: back button can't rip it out from
+    // under the async ad-load call.
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(
-        content: Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Expanded(child: Text('Loading rewarded ad...')),
-          ],
+      builder: (_) => PopScope(
+        canPop: false,
+        child: const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Expanded(child: Text('Loading rewarded ad...')),
+            ],
+          ),
         ),
       ),
     );
-    await Future.delayed(const Duration(seconds: 2));
-    if (!context.mounted) return;
-    Navigator.of(context).pop();
-    await context.read<AppStateProvider>().addExamCreditFromAd();
-    onCreditEarned();
+
+    void closeLoadingDialog() {
+      if (loadingDialogOpen && mounted) {
+        loadingDialogOpen = false;
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+
+    RewardedAd.load(
+      // Replace with your real AdMob rewarded ad unit ID (put it in
+      // AppConstants rather than hardcoding it here).
+      adUnitId: AppConstants.rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          closeLoadingDialog();
+          bool rewardEarned = false;
+
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              if (!mounted) return;
+              setState(() => _loadingAd = false);
+              if (rewardEarned) {
+                widget.onCreditEarned();
+              }
+              // User backed out of the ad early without earning the
+              // reward â€” the gate sheet just stays open, nothing to fix.
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              if (!mounted) return;
+              setState(() => _loadingAd = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Ad failed to show. Please try again.')),
+              );
+            },
+          );
+
+          ad.show(
+            onUserEarnedReward: (ad, reward) async {
+              rewardEarned = true;
+              if (!mounted) return;
+              await context.read<AppStateProvider>().addExamCreditFromAd();
+            },
+          );
+        },
+        onAdFailedToLoad: (error) {
+          closeLoadingDialog();
+          if (!mounted) return;
+          setState(() => _loadingAd = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No ad available right now: ${error.message}')),
+          );
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.timer_off_rounded, size: 48, color: Colors.orange),
-            const SizedBox(height: 16),
-            const Text('No Exam Attempts Left',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(
-              "You've used your free exam attempt. Watch a short ad to get 1 more attempt.",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _watchAd(context),
-                icon: const Icon(Icons.play_circle_outline),
-                label: const Text('Watch Ad for +1 Attempt'),
+            // Drag-handle bar, purely cosmetic (sheet itself doesn't drag).
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-            const SizedBox(height: 10),
+            // Icon with badge, matching the reference image.
+            SizedBox(
+              width: 88,
+              height: 88,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 88,
+                    height: 88,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.success.withOpacity(0.15),
+                          Colors.orange.withOpacity(0.12),
+                        ],
+                      ),
+                    ),
+                    child: const Icon(Icons.assignment_rounded, size: 44, color: Colors.black87),
+                  ),
+                  Positioned(
+                    right: -2,
+                    bottom: 2,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.bolt, size: 16, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              "You're out of free attempts!",
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Continue your learning journey.\nChoose your path:',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colorScheme.onSurfaceVariant, height: 1.4),
+            ),
+            const SizedBox(height: 24),
+
+            // Primary: unlimited, with "Best Value" badge.
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _loadingAd
+                        ? null
+                        : () {
+                            Navigator.of(context).pop();
+                            Navigator.of(context)
+                                .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen()));
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Text('Go Unlimited Forever ₹39',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        SizedBox(width: 8),
+                        Icon(Icons.lock_open_rounded, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: -10,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.amber,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Best Value',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Secondary: watch ad.
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen()));
-                },
-                child: const Text('Remove Ads Forever — ₹39 (Unlimited Exams)'),
+                onPressed: _loadingAd ? null : _watchAd,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: BorderSide(color: colorScheme.outlineVariant),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: _loadingAd
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.play_circle_outline, size: 20),
+                              SizedBox(width: 8),
+                              Text('Watch Ad for +1 Attempt',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '(Ad is less than 30 seconds)',
+                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
               ),
             ),
-            TextButton(onPressed: onCancel, child: const Text('Not Now')),
+            const SizedBox(height: 4),
+            TextButton(
+              onPressed: _loadingAd ? null : widget.onCancel,
+              child: const Text('Not Now'),
+            ),
           ],
         ),
       ),
