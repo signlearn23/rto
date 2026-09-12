@@ -55,7 +55,7 @@ class _ExamScreenState extends State<ExamScreen> {
       isDismissible: false,
       enableDrag: false,
       // PopScope blocks the Android/gesture back button from tearing the
-      // sheet down mid-flow (isDismissible:false alone does NOT do this â€”
+      // sheet down mid-flow (isDismissible:false alone does NOT do this —
       // it only blocks tap-outside-to-close). Without this, back-press
       // during the ad flow was popping the wrong route later on and
       // leaving a stray loading screen behind.
@@ -465,7 +465,7 @@ class _RewardedAdGateSheetState extends State<_RewardedAdGateSheet> {
                 widget.onCreditEarned();
               }
               // User backed out of the ad early without earning the
-              // reward â€” the gate sheet just stays open, nothing to fix.
+              // reward — the gate sheet just stays open, nothing to fix.
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
               ad.dispose();
@@ -581,10 +581,26 @@ class _RewardedAdGateSheetState extends State<_RewardedAdGateSheet> {
                   child: ElevatedButton(
                     onPressed: _loadingAd
                         ? null
-                        : () {
-                            Navigator.of(context).pop();
-                            Navigator.of(context)
-                                .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen()));
+                        : () async {
+                            // Don't pop the sheet before pushing the purchase
+                            // screen. Push it on top instead — if the user
+                            // just backs out, the sheet is still underneath
+                            // and reappears automatically instead of
+                            // exposing ExamScreen's loading spinner.
+                            // RemoveAdsScreen must call
+                            // Navigator.pop(context, true) on a successful
+                            // purchase; a plain back-press returns null.
+                            final purchased = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute(builder: (_) => const RemoveAdsScreen()),
+                            );
+                            if (purchased == true && mounted) {
+                              // Closes the sheet and re-checks credits, which
+                              // will now see ads/unlimited unlocked.
+                              widget.onCreditEarned();
+                            }
+                            // purchased != true: user backed out without
+                            // buying — sheet is already visible again, do
+                            // nothing further.
                           },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
@@ -595,7 +611,7 @@ class _RewardedAdGateSheetState extends State<_RewardedAdGateSheet> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: const [
-                        Text('Go Unlimited Forever ₹39',
+                        Text('Go Unlimited Forever — ₹39',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                         SizedBox(width: 8),
                         Icon(Icons.lock_open_rounded, size: 18),
