@@ -5,15 +5,17 @@ import '../models/question_model.dart';
 
 /// Loads the question bank JSON for a given state from assets.
 ///
-/// File naming convention (NEW): assets/question_bank/<stateCode>.json
-/// Each file now holds ALL languages per question (question/options/
-/// explanation are Map<String,...> keyed by language code), so there is
-/// no more per-language file — languageCode is only used later, when a
-/// screen picks which language to display via
-/// QuestionModel.questionText(languageCode) / .optionsFor(languageCode).
+/// Each state now has TWO files, both in the same multi-language format
+/// (question/options/explanation are Map<String,...> keyed by language
+/// code) â€” split by question type rather than by language:
+///   assets/question_bank/<stateCode>.json        (plain text questions)
+///   assets/question_bank/<stateCode>_signs.json  (sign/image questions)
+/// The two are merged into one list after loading, so every other part
+/// of the app just sees a single combined question list.
 ///
-/// Falls back to assets/question_bank/default.json if the state file is
-/// missing.
+/// Falls back to default.json / default_signs.json if a state's file is
+/// missing. A missing *_signs.json is fine â€” a state with no sign
+/// questions yet just gets an empty list for that part, no error.
 class QuestionRepository {
   final Map<String, List<QuestionModel>> _cache = {};
 
@@ -21,19 +23,44 @@ class QuestionRepository {
     required String stateCode,
     required String languageCode,
   }) async {
-    // Cache key is just the state now — the same loaded data serves every
+    // Cache key is just the state now â€” the same loaded data serves every
     // language, since language is resolved at display time, not load time.
     final cacheKey = stateCode;
     if (_cache.containsKey(cacheKey)) return _cache[cacheKey]!;
 
-    List<QuestionModel> questions;
+    final textQuestions = await _loadWithFallback(
+      primary: 'assets/question_bank/$stateCode.json',
+      fallback: 'assets/question_bank/default.json',
+    );
+    final signQuestions = await _loadWithFallback(
+      primary: 'assets/question_bank/${stateCode}_signs.json',
+      fallback: 'assets/question_bank/default_signs.json',
+      allowEmpty: true,
+    );
+
+    final combined = [...textQuestions, ...signQuestions];
+    _cache[cacheKey] = combined;
+    return combined;
+  }
+
+  /// Tries [primary], then [fallback]. If both are missing/unparseable and
+  /// [allowEmpty] is true, returns an empty list instead of throwing â€”
+  /// used for the sign-question file, which some states may not have yet.
+  Future<List<QuestionModel>> _loadWithFallback({
+    required String primary,
+    required String fallback,
+    bool allowEmpty = false,
+  }) async {
     try {
-      questions = await _loadFromAsset('assets/question_bank/$stateCode.json');
+      return await _loadFromAsset(primary);
     } catch (_) {
-      questions = await _loadFromAsset('assets/question_bank/default.json');
+      try {
+        return await _loadFromAsset(fallback);
+      } catch (_) {
+        if (allowEmpty) return [];
+        rethrow;
+      }
     }
-    _cache[cacheKey] = questions;
-    return questions;
   }
 
   Future<List<QuestionModel>> _loadFromAsset(String path) async {
@@ -53,6 +80,15 @@ class QuestionRepository {
     );
     all.shuffle(Random());
     return all.take(count).toList();
+  }
+
+  /// Returns every question for a state, ungrouped â€” used by screens that
+  /// offer an "All topics" practice mode alongside per-topic practice.
+  Future<List<QuestionModel>> allQuestions({
+    required String stateCode,
+    required String languageCode,
+  }) async {
+    return loadQuestions(stateCode: stateCode, languageCode: languageCode);
   }
 
   /// Groups questions by topic for the Question Bank / Practice screens.
