@@ -199,7 +199,12 @@ class _QuestionSlideView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // optionCount handles both question types: text options (read via
+    // optionsFor) and sign/image options (optionImages) â€” optionsFor alone
+    // would return an empty list for image-option questions, since those
+    // have no "options" map at all.
     final options = question.optionsFor(lang);
+    final optionCount = question.optionCount(lang);
     final explanation = question.explanationText(lang);
 
     return Padding(
@@ -211,9 +216,19 @@ class _QuestionSlideView extends StatelessWidget {
           const SizedBox(height: 8),
           Text('Question $questionNumber of $totalQuestions', style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 16),
+          if (question.hasImage)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(question.image!, height: 150, fit: BoxFit.contain),
+                ),
+              ),
+            ),
           Text(question.questionText(lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 20),
-          ...List.generate(options.length, (i) {
+          ...List.generate(optionCount, (i) {
             final isSelected = selected == i;
             final isCorrect = i == question.correctIndex;
             Color? color;
@@ -234,7 +249,17 @@ class _QuestionSlideView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(children: [
-                    Expanded(child: Text(options[i])),
+                    Expanded(
+                      child: question.hasImageOptions
+                          ? Center(
+                              child: Image.asset(
+                                question.optionImages![i],
+                                height: 80,
+                                fit: BoxFit.contain,
+                              ),
+                            )
+                          : Text(options[i]),
+                    ),
                     if (selected != null && isCorrect) const Icon(Icons.check_circle, color: Colors.green),
                     if (selected != null && isSelected && !isCorrect) const Icon(Icons.cancel, color: Colors.red),
                   ]),
@@ -245,7 +270,7 @@ class _QuestionSlideView extends StatelessWidget {
           if (selected != null && explanation != null)
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 12),
-              child: Text('💡 $explanation', style: TextStyle(color: Colors.grey.shade700)),
+              child: Text('ðŸ’¡ $explanation', style: TextStyle(color: Colors.grey.shade700)),
             ),
           const Spacer(),
           SizedBox(
