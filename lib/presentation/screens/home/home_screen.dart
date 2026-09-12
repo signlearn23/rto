@@ -6,7 +6,7 @@ import '../../../core/widgets/custom_card.dart';
 import '../../../core/widgets/ad_banner.dart';
 import '../../providers/app_state_provider.dart';
 import '../question_bank/question_bank_screen.dart';
-import '../practice/practice_topic_screen.dart';
+import '../practice/practice_question_screen.dart';
 import '../exam/exam_screen.dart';
 import '../result_history/result_history_screen.dart';
 import '../settings/settings_screen.dart';
@@ -68,8 +68,9 @@ class HomeScreen extends StatelessWidget {
                           title: 'Practice Mode',
                           subtitle: 'No time limit, learn at ease',
                           color: Colors.teal,
-                          onTap: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const PracticeTopicScreen())),
+                           onTap: () => Navigator.of(context).push(
+                           MaterialPageRoute(builder: (_) => const PracticeQuestionScreen(topic: null)),
+                           ),
                         ),
                         FeatureCard(
                           icon: Icons.timer_rounded,
