@@ -14,7 +14,8 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
 
   // Safe to call even if ads aren't shown yet (e.g. user already removed ads).
-  unawaited(MobileAds.instance.initialize());
+  // unawaited(MobileAds.instance.initialize());
+  await MobileAds.instance.initialize();
 
   runApp(
     ChangeNotifierProvider(
