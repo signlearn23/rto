@@ -1,217 +1,318 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/localization/state_language_map.dart';
-import '../../../core/widgets/custom_card.dart';
-import '../../../core/widgets/ad_banner.dart';
+import '../../../data/models/question_model.dart';
+import '../../../data/repositories/question_repository.dart';
 import '../../providers/app_state_provider.dart';
-import '../question_bank/question_bank_screen.dart';
-import '../practice/practice_question_screen.dart';
-import '../exam/exam_screen.dart';
-import '../result_history/result_history_screen.dart';
-import '../settings/settings_screen.dart';
-import '../remove_ads/remove_ads_screen.dart';
-import '../driving_school/driving_school_list_screen.dart';
-import '../../../core/widgets/language_picker.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+const int _questionsPerAd = 6;
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
+sealed class _Slide {}
+class _QuestionSlide extends _Slide {
+  final QuestionModel question;
+  _QuestionSlide(this.question);
+}
+class _AdSlide extends _Slide {
+  final int slotKey;
+  _AdSlide(this.slotKey);
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  RewardedAd? _rewardedAd;
-  bool _loadingReward = false;
+class PracticeQuestionScreen extends StatefulWidget {
+  final String? topic; // null = practice across all topics
+  const PracticeQuestionScreen({super.key, this.topic});
+
+  @override
+  State<PracticeQuestionScreen> createState() => _PracticeQuestionScreenState();
+}
+
+class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
+  final _repo = QuestionRepository();
+  final _pageController = PageController();
+  final Map<int, NativeAd> _loadedAds = {};
+  final Set<int> _adLoaded = {};
+
+  List<_Slide> _slides = [];
+  final Map<int, int?> _selectedAt = {};
+  int _correct = 0;
+  bool _loading = true;
+  String _lang = 'en';
 
   @override
   void initState() {
     super.initState();
-    _preloadRewardedAd();
+    _load();
   }
 
-  void _preloadRewardedAd() {
-    RewardedAd.load(
-      adUnitId: 'ca-app-pub-3940256099942544/5224354917', // TODO: real rewarded ad unit id
-      request: const AdRequest(),
-      rewardedAdLoadCallback: RewardedAdLoadCallback(
-        onAdLoaded: (ad) => _rewardedAd = ad,
-        onAdFailedToLoad: (_) => _rewardedAd = null,
+  Future<void> _load() async {
+    final appState = context.read<AppStateProvider>();
+    final stateCode = appState.selectedState ?? 'tamilnadu';
+    final languageCode = appState.selectedLanguage ?? 'en';
+
+    final questions = widget.topic != null
+        ? (await _repo.groupedByTopic(stateCode: stateCode, languageCode: languageCode))[widget.topic] ?? []
+        : await _repo.allQuestions(stateCode: stateCode, languageCode: languageCode);
+
+    final slides = <_Slide>[];
+    var since = 0, adSlot = 0;
+    for (final q in questions) {
+      slides.add(_QuestionSlide(q));
+      if (++since == _questionsPerAd) {
+        slides.add(_AdSlide(adSlot++));
+        since = 0;
+      }
+    }
+
+    setState(() {
+      _lang = languageCode;
+      _slides = slides;
+      _loading = false;
+    });
+  }
+
+  int get _questionCount => _slides.whereType<_QuestionSlide>().length;
+
+  void _selectOption(int slideIndex, int optionIndex) {
+    final q = (_slides[slideIndex] as _QuestionSlide).question;
+    if (_selectedAt[slideIndex] != null) return;
+    setState(() {
+      _selectedAt[slideIndex] = optionIndex;
+      if (optionIndex == q.correctIndex) _correct++;
+    });
+  }
+
+  void _goNext(int currentIndex) {
+    if (currentIndex == _slides.length - 1) {
+      _showResult();
+      return;
+    }
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _showResult() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Practice Complete'),
+        content: Text('You got $_correct / $_questionCount correct.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _watchAdForExamCredit(AppStateProvider appState) async {
-    if (_loadingReward) return;
-
-    if (_rewardedAd == null) {
-      setState(() => _loadingReward = true);
-      // Give one short retry if the ad wasn't ready yet.
-      await Future.delayed(const Duration(milliseconds: 400));
-      setState(() => _loadingReward = false);
-      if (_rewardedAd == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ad not ready yet, try again in a moment')),
-          );
-        }
-        _preloadRewardedAd();
-        return;
-      }
-    }
-
-    final ad = _rewardedAd!;
-    _rewardedAd = null; // consumed; a fresh one loads in fullScreenContentCallback
-
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdDismissedFullScreenContent: (ad) {
-        ad.dispose();
-        _preloadRewardedAd();
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        ad.dispose();
-        _preloadRewardedAd();
-      },
-    );
-
-    ad.show(
-      onUserEarnedReward: (ad, reward) {
-        appState.addExamCredit();
-      },
-    );
+  NativeAd _adFor(int slotKey) {
+    return _loadedAds.putIfAbsent(slotKey, () {
+      final ad = NativeAd(
+        adUnitId: 'ca-app-pub-3940256099942544/2247696110', // TODO: your real native ad unit id
+        factoryId: 'advancedNativeAd', // must match the NativeAdFactory registered natively
+        listener: NativeAdListener(
+          onAdLoaded: (_) => setState(() => _adLoaded.add(slotKey)),
+          onAdFailedToLoad: (ad, error) {
+            ad.dispose();
+            _loadedAds.remove(slotKey);
+            setState(() {});
+          },
+        ),
+        request: const AdRequest(),
+      )..load();
+      return ad;
+    });
   }
 
-  // showLanguagePicker() is a function that shows its own bottom sheet and
-  // returns the chosen language code (or null if dismissed) â€” it isn't a
-  // widget, so it's called directly rather than wrapped in showDialog().
-  Future<void> _openLanguagePicker(AppStateProvider appState) async {
-    final code = await showLanguagePicker(
-      context,
-      currentLanguageCode: appState.selectedLanguage,
-    );
-    if (code != null) {
-      await appState.setLanguage(code);
-    }
+  @override
+  void dispose() {
+    for (final ad in _loadedAds.values) ad.dispose();
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppStateProvider>();
-    final stateInfo = StateLanguageMap.byCode(appState.selectedState ?? '');
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_slides.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: Text(widget.topic ?? 'Practice')),
+        body: const Center(child: Text('No questions available yet.')),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        centerTitle: false,
-        title: Text(stateInfo?.displayName ?? 'RTO Exam'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.language_rounded),
-            tooltip: 'Change language',
-            onPressed: () => _openLanguagePicker(appState),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () =>
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        ],
+      appBar: AppBar(title: Text(widget.topic ?? 'Practice')),
+      body: PageView.builder(
+        controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(), // block swipe-skipping ad/question slides
+        itemCount: _slides.length,
+        itemBuilder: (context, index) {
+          final slide = _slides[index];
+          if (slide is _AdSlide) {
+            return _AdSlideView(
+              ad: _loadedAds[slide.slotKey] ?? _adFor(slide.slotKey),
+              isLoaded: _adLoaded.contains(slide.slotKey),
+              onContinue: () => _goNext(index),
+            );
+          }
+          final q = (slide as _QuestionSlide).question;
+          final questionNumber = _slides.take(index + 1).whereType<_QuestionSlide>().length;
+          return _QuestionSlideView(
+            question: q,
+            lang: _lang,
+            questionNumber: questionNumber,
+            totalQuestions: _questionCount,
+            selected: _selectedAt[index],
+            onSelect: (i) => _selectOption(index, i),
+            onNext: () => _goNext(index),
+          );
+        },
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Prepare for your Learning License Test',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    GridView.count(
-                      crossAxisCount: 2,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 14,
-                      crossAxisSpacing: 14,
-                      childAspectRatio: 0.95,
-                      children: [
-                        FeatureCard(
-                          icon: Icons.menu_book_rounded,
-                          title: 'Question Bank',
-                          subtitle: 'Browse all topics & signs',
-                          color: Colors.indigo,
-                          onTap: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const QuestionBankScreen())),
-                        ),
-                        FeatureCard(
-                          icon: Icons.fitness_center_rounded,
-                          title: 'Practice Mode',
-                          subtitle: 'No time limit, learn at ease',
-                          color: Colors.teal,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const PracticeQuestionScreen(topic: null)),
-                          ),
-                        ),
-                        FeatureCard(
-                          icon: Icons.timer_rounded,
-                          title: 'Exam Mode',
-                          subtitle: '10 Qs â€¢ 30s each â€¢ 7/10 to pass',
-                          color: Colors.deepOrange,
-                          badge: appState.isAdsRemoved
-                              ? 'PRO'
-                              : (appState.examCredits > 0 ? '${appState.examCredits} left' : 'Watch Ad'),
-                          badgeIcon: (!appState.isAdsRemoved && appState.examCredits == 0)
-                              ? Icons.play_circle_fill_rounded
-                              : null,
-                          onTap: () {
-                            final canEnter = appState.isAdsRemoved || appState.examCredits > 0;
-                            if (canEnter) {
-                              Navigator.of(context)
-                                  .push(MaterialPageRoute(builder: (_) => const ExamScreen()));
-                            } else {
-                              _watchAdForExamCredit(appState);
-                            }
-                          },
-                        ),
-                        FeatureCard(
-                          icon: Icons.bar_chart_rounded,
-                          title: 'Result History',
-                          subtitle: 'Track your past attempts',
-                          color: Colors.purple,
-                          onTap: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const ResultHistoryScreen())),
-                        ),
-                        FeatureCard(
-                          icon: Icons.school_rounded,
-                          title: 'Driving Schools',
-                          subtitle: 'Find schools near you',
-                          color: Colors.brown,
-                          onTap: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const DrivingSchoolListScreen())),
-                        ),
-                        if (!appState.isAdsRemoved)
-                          FeatureCard(
-                            icon: Icons.block_rounded,
-                            title: 'Remove Ads',
-                            subtitle: 'One-time â‚¹39 â€” no ads forever',
-                            color: AppColors.accent,
-                            onTap: () => Navigator.of(context)
-                                .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen())),
-                          ),
-                      ],
-                    ),
-                  ],
+    );
+  }
+}
+
+class _QuestionSlideView extends StatelessWidget {
+  final QuestionModel question;
+  final String lang;
+  final int questionNumber;
+  final int totalQuestions;
+  final int? selected;
+  final ValueChanged<int> onSelect;
+  final VoidCallback onNext;
+
+  const _QuestionSlideView({
+    required this.question,
+    required this.lang,
+    required this.questionNumber,
+    required this.totalQuestions,
+    required this.selected,
+    required this.onSelect,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // optionCount handles both question types: text options (read via
+    // optionsFor) and sign/image options (optionImages) â€” optionsFor alone
+    // would return an empty list for image-option questions, since those
+    // have no "options" map at all.
+    final options = question.optionsFor(lang);
+    final optionCount = question.optionCount(lang);
+    final explanation = question.explanationText(lang);
+
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LinearProgressIndicator(value: questionNumber / totalQuestions),
+          const SizedBox(height: 8),
+          Text('Question $questionNumber of $totalQuestions', style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 16),
+          if (question.hasImage)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(question.image!, height: 150, fit: BoxFit.contain),
                 ),
               ),
             ),
-            if (!appState.isAdsRemoved) const AdBanner(),
-          ],
-        ),
+          Text(question.questionText(lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 20),
+          ...List.generate(optionCount, (i) {
+            final isSelected = selected == i;
+            final isCorrect = i == question.correctIndex;
+            Color? color;
+            if (selected != null) {
+              if (isCorrect) color = Colors.green.withOpacity(0.15);
+              else if (isSelected) color = Colors.red.withOpacity(0.15);
+            }
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: InkWell(
+                onTap: () => onSelect(i),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: color,
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(children: [
+                    Expanded(
+                      child: question.hasImageOptions
+                          ? Center(
+                              child: Image.asset(
+                                question.optionImages![i],
+                                height: 80,
+                                fit: BoxFit.contain,
+                              ),
+                            )
+                          : Text(options[i]),
+                    ),
+                    if (selected != null && isCorrect) const Icon(Icons.check_circle, color: Colors.green),
+                    if (selected != null && isSelected && !isCorrect) const Icon(Icons.cancel, color: Colors.red),
+                  ]),
+                ),
+              ),
+            );
+          }),
+          if (selected != null && explanation != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 12),
+              child: Text('ðŸ’¡ $explanation', style: TextStyle(color: Colors.grey.shade700)),
+            ),
+          const Spacer(),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: selected == null ? null : onNext,
+              child: Text(questionNumber == totalQuestions ? 'Finish' : 'Next'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdSlideView extends StatelessWidget {
+  final NativeAd ad;
+  final bool isLoaded;
+  final VoidCallback onContinue;
+
+  const _AdSlideView({required this.ad, required this.isLoaded, required this.onContinue});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          const Text('A quick break', style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 16),
+          Expanded(
+            child: isLoaded
+                ? SizedBox(width: double.infinity, child: AdWidget(ad: ad))
+                : const Center(child: CircularProgressIndicator()),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(onPressed: onContinue, child: const Text('Continue')),
+          ),
+        ],
       ),
     );
   }
