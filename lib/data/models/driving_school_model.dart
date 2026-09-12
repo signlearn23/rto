@@ -1,43 +1,46 @@
-class DrivingSchoolModel {
+class DrivingSchool {
   final String id;
   final String name;
-  final String type; // Car / Bike / Both
-  final String location; // free text, no maps dependency
-  final String timing;
-  final String cost;
-  final String contact;
-  final DateTime submittedAt;
+  final List<String> phoneNumbers;
+  final String address;
+  final String area;
+  final String pincode;
+  final List<String> services;
+  final String? email;
+  final Map<String, String> hoursOfOperation; // e.g. {'All Days': '10:00 am - 06:00 pm'}
+  final String? paymentModes;
+  final double? latitude;
+  final double? longitude;
+  bool isBookmarked;
 
-  DrivingSchoolModel({
+  DrivingSchool({
     required this.id,
     required this.name,
-    required this.type,
-    required this.location,
-    required this.timing,
-    required this.cost,
-    required this.contact,
-    required this.submittedAt,
+    required this.phoneNumbers,
+    required this.address,
+    required this.area,
+    required this.pincode,
+    required this.services,
+    this.email,
+    this.hoursOfOperation = const {},
+    this.paymentModes,
+    this.latitude,
+    this.longitude,
+    this.isBookmarked = false,
   });
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'type': type,
-        'location': location,
-        'timing': timing,
-        'cost': cost,
-        'contact': contact,
-        'submittedAt': submittedAt.toIso8601String(),
-      };
-
-  factory DrivingSchoolModel.fromJson(Map<String, dynamic> json) => DrivingSchoolModel(
-        id: json['id'],
-        name: json['name'],
-        type: json['type'],
-        location: json['location'],
-        timing: json['timing'],
-        cost: json['cost'],
-        contact: json['contact'],
-        submittedAt: DateTime.parse(json['submittedAt']),
+  factory DrivingSchool.fromJson(Map<String, dynamic> json) => DrivingSchool(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        phoneNumbers: List<String>.from(json['phoneNumbers'] ?? []),
+        address: json['address'] as String? ?? '',
+        area: json['area'] as String? ?? '',
+        pincode: json['pincode'] as String? ?? '',
+        services: List<String>.from(json['services'] ?? []),
+        email: json['email'] as String?,
+        hoursOfOperation: Map<String, String>.from(json['hoursOfOperation'] ?? {}),
+        paymentModes: json['paymentModes'] as String?,
+        latitude: (json['latitude'] as num?)?.toDouble(),
+        longitude: (json['longitude'] as num?)?.toDouble(),
       );
 }
