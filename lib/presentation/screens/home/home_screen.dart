@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/state_language_map.dart';
 import '../../../core/widgets/custom_card.dart';
@@ -11,10 +12,76 @@ import '../exam/exam_screen.dart';
 import '../result_history/result_history_screen.dart';
 import '../settings/settings_screen.dart';
 import '../remove_ads/remove_ads_screen.dart';
-import '../contribute_school/driving_school_form_screen.dart';
+import '../driving_school/driving_school_list_screen.dart';
+import '../language/language_picker_dialog.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  RewardedAd? _rewardedAd;
+  bool _loadingReward = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _preloadRewardedAd();
+  }
+
+  void _preloadRewardedAd() {
+    RewardedAd.load(
+      adUnitId: 'ca-app-pub-3940256099942544/5224354917', // TODO: real rewarded ad unit id
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) => _rewardedAd = ad,
+        onAdFailedToLoad: (_) => _rewardedAd = null,
+      ),
+    );
+  }
+
+  Future<void> _watchAdForExamCredit(AppStateProvider appState) async {
+    if (_loadingReward) return;
+
+    if (_rewardedAd == null) {
+      setState(() => _loadingReward = true);
+      // Give one short retry if the ad wasn't ready yet.
+      await Future.delayed(const Duration(milliseconds: 400));
+      setState(() => _loadingReward = false);
+      if (_rewardedAd == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Ad not ready yet, try again in a moment')),
+          );
+        }
+        _preloadRewardedAd();
+        return;
+      }
+    }
+
+    final ad = _rewardedAd!;
+    _rewardedAd = null; // consumed; a fresh one loads in fullScreenContentCallback
+
+    ad.fullScreenContentCallback = FullScreenContentCallback(
+      onAdDismissedFullScreenContent: (ad) {
+        ad.dispose();
+        _preloadRewardedAd();
+      },
+      onAdFailedToShowFullScreenContent: (ad, error) {
+        ad.dispose();
+        _preloadRewardedAd();
+      },
+    );
+
+    ad.show(
+      onUserEarnedReward: (ad, reward) {
+        appState.addExamCredit(); // TODO: add this method to AppStateProvider
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,8 +90,17 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: false,
         title: Text(stateInfo?.displayName ?? 'RTO Exam'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.language_rounded),
+            tooltip: 'Change language',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => const LanguagePickerDialog(),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () =>
@@ -35,7 +111,6 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            if (!appState.isAdsRemoved) const AdBanner(),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -68,18 +143,30 @@ class HomeScreen extends StatelessWidget {
                           title: 'Practice Mode',
                           subtitle: 'No time limit, learn at ease',
                           color: Colors.teal,
-                           onTap: () => Navigator.of(context).push(
-                           MaterialPageRoute(builder: (_) => const PracticeQuestionScreen(topic: null)),
-                           ),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const PracticeQuestionScreen(topic: null)),
+                          ),
                         ),
                         FeatureCard(
                           icon: Icons.timer_rounded,
                           title: 'Exam Mode',
                           subtitle: '10 Qs • 30s each • 7/10 to pass',
                           color: Colors.deepOrange,
-                          badge: appState.isAdsRemoved ? 'PRO' : '${appState.examCredits} left',
-                          onTap: () => Navigator.of(context)
-                              .push(MaterialPageRoute(builder: (_) => const ExamScreen())),
+                          badge: appState.isAdsRemoved
+                              ? 'PRO'
+                              : (appState.examCredits > 0 ? '${appState.examCredits} left' : 'Watch Ad'),
+                          badgeIcon: (!appState.isAdsRemoved && appState.examCredits == 0)
+                              ? Icons.play_circle_fill_rounded
+                              : null,
+                          onTap: () {
+                            final canEnter = appState.isAdsRemoved || appState.examCredits > 0;
+                            if (canEnter) {
+                              Navigator.of(context)
+                                  .push(MaterialPageRoute(builder: (_) => const ExamScreen()));
+                            } else {
+                              _watchAdForExamCredit(appState);
+                            }
+                          },
                         ),
                         FeatureCard(
                           icon: Icons.bar_chart_rounded,
@@ -90,12 +177,12 @@ class HomeScreen extends StatelessWidget {
                               .push(MaterialPageRoute(builder: (_) => const ResultHistoryScreen())),
                         ),
                         FeatureCard(
-                          icon: Icons.add_business_rounded,
-                          title: 'Add Driving School',
-                          subtitle: 'Contribute school details',
+                          icon: Icons.school_rounded,
+                          title: 'Driving Schools',
+                          subtitle: 'Find schools near you',
                           color: Colors.brown,
-                          onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const DrivingSchoolFormScreen())),
+                          onTap: () => Navigator.of(context)
+                              .push(MaterialPageRoute(builder: (_) => const DrivingSchoolListScreen())),
                         ),
                         if (!appState.isAdsRemoved)
                           FeatureCard(
@@ -112,6 +199,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             ),
+            if (!appState.isAdsRemoved) const AdBanner(),
           ],
         ),
       ),
