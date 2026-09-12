@@ -78,9 +78,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
     ad.show(
       onUserEarnedReward: (ad, reward) {
-        appState.addExamCredit(); // TODO: add this method to AppStateProvider
+        appState.addExamCredit();
       },
     );
+  }
+
+  // showLanguagePicker() is a function that shows its own bottom sheet and
+  // returns the chosen language code (or null if dismissed) â€” it isn't a
+  // widget, so it's called directly rather than wrapped in showDialog().
+  Future<void> _openLanguagePicker(AppStateProvider appState) async {
+    final code = await showLanguagePicker(
+      context,
+      currentLanguageCode: appState.selectedLanguage,
+    );
+    if (code != null) {
+      await appState.setLanguage(code);
+    }
   }
 
   @override
@@ -96,10 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.language_rounded),
             tooltip: 'Change language',
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => const showLanguagePicker(),
-            ),
+            onPressed: () => _openLanguagePicker(appState),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -150,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         FeatureCard(
                           icon: Icons.timer_rounded,
                           title: 'Exam Mode',
-                          subtitle: '10 Qs • 30s each • 7/10 to pass',
+                          subtitle: '10 Qs â€¢ 30s each â€¢ 7/10 to pass',
                           color: Colors.deepOrange,
                           badge: appState.isAdsRemoved
                               ? 'PRO'
@@ -188,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           FeatureCard(
                             icon: Icons.block_rounded,
                             title: 'Remove Ads',
-                            subtitle: 'One-time ₹39 — no ads forever',
+                            subtitle: 'One-time â‚¹39 â€” no ads forever',
                             color: AppColors.accent,
                             onTap: () => Navigator.of(context)
                                 .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen())),
