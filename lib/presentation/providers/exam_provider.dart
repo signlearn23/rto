@@ -54,12 +54,16 @@ class ExamProvider extends ChangeNotifier {
   Future<void> submitAnswer(int? selectedIndex, {bool timedOut = false}) async {
     final q = currentQuestion;
     if (q == null) return;
+    // QuestionModel now stores question/options per language
+    // (Map<String,...>), so resolve them for the exam's language before
+    // saving the flat snapshot into QuestionResult (which still expects
+    // plain String/List<String> — that model is unchanged).
     _results.add(QuestionResult(
       questionId: q.id,
-      questionText: q.question,
+      questionText: q.questionText(_language),
       selectedIndex: selectedIndex,
       correctIndex: q.correctIndex,
-      options: q.options,
+      options: q.optionsFor(_language),
       timedOut: timedOut,
     ));
 
