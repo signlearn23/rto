@@ -130,6 +130,11 @@ class _ExamScreenState extends State<ExamScreen> {
           if (q == null) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
+          // QuestionModel now stores question/options per language
+          // (Map<String,...>) instead of a flat String/List<String>, so
+          // every place that reads them needs the current language code.
+          final lang = context.watch<AppStateProvider>().selectedLanguage ?? 'en';
+          final questionOptions = q.optionsFor(lang);
           return PopScope(
             canPop: false,
             onPopInvokedWithResult: (didPop, _) async {
@@ -200,7 +205,7 @@ class _ExamScreenState extends State<ExamScreen> {
                                         ),
                                       ),
                                       child: Text(
-                                        'Q. ${q.question}',
+                                        'Q. ${q.questionText(lang)}',
                                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                               fontWeight: FontWeight.w600,
                                               color: colorScheme.onSurface,
@@ -219,11 +224,11 @@ class _ExamScreenState extends State<ExamScreen> {
                                         ),
                                       ),
                                       child: Column(
-                                        children: List.generate(q.options.length, (i) {
-                                          final isLast = i == q.options.length - 1;
+                                        children: List.generate(questionOptions.length, (i) {
+                                          final isLast = i == questionOptions.length - 1;
                                           return _OptionRow(
                                             number: i + 1,
-                                            text: q.options[i],
+                                            text: questionOptions[i],
                                             selected: _selected == i,
                                             showDivider: !isLast,
                                             onTap: () => _onSelectOption(i),
