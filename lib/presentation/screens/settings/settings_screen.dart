@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../providers/app_state_provider.dart';
 import '../../widgets/language_picker.dart';
-import '../onboarding/onboarding_selection_screen';
+import '../onboarding/onboarding_selection_screen.dart';
 import '../remove_ads/remove_ads_screen.dart';
 import 'simple_content_screen.dart';
 
