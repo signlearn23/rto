@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/localization/state_language_map.dart';
 import '../../../core/widgets/custom_card.dart';
+import '../../../core/widgets/ad_banner.dart';
 import '../../providers/app_state_provider.dart';
 import '../question_bank/question_bank_screen.dart';
 import '../practice/practice_topic_screen.dart';
@@ -34,7 +35,7 @@ class HomeScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            if (!appState.isAdsRemoved) _TopAdBanner(),
+            if (!appState.isAdsRemoved) const AdBanner(),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
@@ -113,22 +114,6 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Placeholder banner widget. Replace body with a real BannerAd (google_mobile_ads)
-/// once you have your AdMob banner unit ID wired in AppConstants.bannerAdUnitId.
-class _TopAdBanner extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 50,
-      color: Colors.black12,
-      alignment: Alignment.center,
-      child: const Text('Ad banner placeholder — wire up google_mobile_ads BannerAd here',
-          style: TextStyle(fontSize: 11, color: Colors.black54)),
     );
   }
 }
