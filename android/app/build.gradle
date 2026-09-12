@@ -16,7 +16,7 @@ def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "
 def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "1.0.0"
 
 android {
-    namespace "com.example.rtoexam"
+    namespace "com.kairostudio.rtoexpert"
     compileSdk 34
     ndkVersion "25.1.8937393"
 
@@ -34,7 +34,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.rtoexam"
+        applicationId "com.kairostudio.rtoexpert"
         // Android 5.0 (Lollipop, API 21) and above
         minSdkVersion 21
         targetSdkVersion 34
