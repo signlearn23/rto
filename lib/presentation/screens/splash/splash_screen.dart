@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../providers/app_state_provider.dart';
-import '../onboarding/select_state_screen.dart';
+import '../onboarding/onboarding_selection_screen.dart';
 import '../home/home_screen.dart';
 
 /// Splash with a simple vehicle animation built from Flutter widgets
@@ -34,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     if (!mounted) return;
     final appState = context.read<AppStateProvider>();
     Navigator.of(context).pushReplacement(MaterialPageRoute(
-      builder: (_) => appState.onboardingDone ? const HomeScreen() : const SelectStateScreen(),
+      builder: (_) => appState.onboardingDone ? const HomeScreen() : const OnboardingSelectionScreen(),
     ));
   }
 
@@ -82,7 +82,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             ),
             const SizedBox(height: 24),
             const Text(
-              'RTO Exam',
+              'RTO Expert',
               style: TextStyle(
                   color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1),
             ),
