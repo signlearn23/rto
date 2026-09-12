@@ -3,9 +3,17 @@ import 'dart:math';
 import 'package:flutter/services.dart' show rootBundle;
 import '../models/question_model.dart';
 
-/// Loads the question bank JSON for a given state + language from assets.
-/// File naming convention: assets/question_bank/<stateCode>_<languageCode>.json
-/// Falls back to English if a state+language combo file is missing.
+/// Loads the question bank JSON for a given state from assets.
+///
+/// File naming convention (NEW): assets/question_bank/<stateCode>.json
+/// Each file now holds ALL languages per question (question/options/
+/// explanation are Map<String,...> keyed by language code), so there is
+/// no more per-language file — languageCode is only used later, when a
+/// screen picks which language to display via
+/// QuestionModel.questionText(languageCode) / .optionsFor(languageCode).
+///
+/// Falls back to assets/question_bank/default.json if the state file is
+/// missing.
 class QuestionRepository {
   final Map<String, List<QuestionModel>> _cache = {};
 
@@ -13,19 +21,16 @@ class QuestionRepository {
     required String stateCode,
     required String languageCode,
   }) async {
-    final cacheKey = '${stateCode}_$languageCode';
+    // Cache key is just the state now — the same loaded data serves every
+    // language, since language is resolved at display time, not load time.
+    final cacheKey = stateCode;
     if (_cache.containsKey(cacheKey)) return _cache[cacheKey]!;
 
     List<QuestionModel> questions;
     try {
-      questions = await _loadFromAsset('assets/question_bank/${stateCode}_$languageCode.json');
+      questions = await _loadFromAsset('assets/question_bank/$stateCode.json');
     } catch (_) {
-      // Fallback to English for that state, then to a generic bank.
-      try {
-        questions = await _loadFromAsset('assets/question_bank/${stateCode}_en.json');
-      } catch (_) {
-        questions = await _loadFromAsset('assets/question_bank/default_en.json');
-      }
+      questions = await _loadFromAsset('assets/question_bank/default.json');
     }
     _cache[cacheKey] = questions;
     return questions;
