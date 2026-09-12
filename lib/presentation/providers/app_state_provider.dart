@@ -56,4 +56,14 @@ class AppStateProvider extends ChangeNotifier {
     await creditManager.addCreditFromAd();
     notifyListeners();
   }
+
+  /// Generic credit grant, not tied to watching a rewarded ad â€” e.g. a
+  /// promo/bonus credit triggered from the home screen. Reuses the same
+  /// underlying credit bump as addExamCreditFromAd(); if
+  /// ExamCreditManager later grows a distinct "bonus" method with
+  /// different bookkeeping, swap the call below to that instead.
+  Future<void> addExamCredit() async {
+    await creditManager.addCreditFromAd();
+    notifyListeners();
+  }
 }
