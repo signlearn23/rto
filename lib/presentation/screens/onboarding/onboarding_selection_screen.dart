@@ -74,13 +74,14 @@ class _OnboardingSelectionScreenState extends State<OnboardingSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(_step == _Step.state ? 'Select Your State' : 'Select Language'),
         elevation: 0,
         backgroundColor: Colors.transparent,
-        foregroundColor: Colors.black87,
+        foregroundColor: colorScheme.onSurface,
         leading: _step == _Step.language
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -102,6 +103,7 @@ class _OnboardingSelectionScreenState extends State<OnboardingSelectionScreen> {
   // ---------------- STEP 1: STATE ----------------
 
   Widget _buildStateStep({required Key key}) {
+    final colorScheme = Theme.of(context).colorScheme;
     final states = StateLanguageMap.all
         .where((s) => s.displayName.toLowerCase().contains(_query.toLowerCase()))
         .toList();
@@ -112,23 +114,25 @@ class _OnboardingSelectionScreenState extends State<OnboardingSelectionScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: TextField(
+            style: TextStyle(color: colorScheme.onSurface),
             decoration: InputDecoration(
               hintText: 'Search state',
-              prefixIcon: const Icon(Icons.search),
+              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+              prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
               filled: true,
-              fillColor: Colors.white,
+              fillColor: colorScheme.surfaceContainerHigh,
               contentPadding: const EdgeInsets.symmetric(vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
+                borderSide: BorderSide(color: colorScheme.outlineVariant),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade200),
+                borderSide: BorderSide(color: colorScheme.outlineVariant),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+                borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
               ),
             ),
             onChanged: (v) => setState(() => _query = v),
@@ -139,7 +143,7 @@ class _OnboardingSelectionScreenState extends State<OnboardingSelectionScreen> {
               ? Center(
                   child: Text(
                     'No states match "$_query"',
-                    style: TextStyle(color: Colors.grey.shade500),
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
                   ),
                 )
               : ListView.separated(
@@ -172,6 +176,7 @@ class _OnboardingSelectionScreenState extends State<OnboardingSelectionScreen> {
   // ---------------- STEP 2: LANGUAGE (fixed 5 options) ----------------
 
   Widget _buildLanguageStep({required Key key}) {
+    final colorScheme = Theme.of(context).colorScheme;
     final stateInfo = StateLanguageMap.byCode(_selectedStateCode ?? '');
 
     return Padding(
@@ -184,7 +189,7 @@ class _OnboardingSelectionScreenState extends State<OnboardingSelectionScreen> {
             stateInfo != null
                 ? 'Choose your preferred language for ${stateInfo.displayName}'
                 : 'Choose your preferred language',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade700, height: 1.3),
+            style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant, height: 1.3),
           ),
           const SizedBox(height: 24),
           Expanded(
@@ -229,8 +234,9 @@ class _SelectableCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? AppColors.primary.withOpacity(0.08) : Colors.white,
+      color: selected ? AppColors.primary.withOpacity(0.12) : colorScheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -240,7 +246,7 @@ class _SelectableCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selected ? AppColors.primary : Colors.grey.shade200,
+              color: selected ? AppColors.primary : colorScheme.outlineVariant,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -252,13 +258,13 @@ class _SelectableCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? AppColors.primary : Colors.black87,
+                    color: selected ? AppColors.primary : colorScheme.onSurface,
                   ),
                 ),
               ),
               Icon(
                 selected ? Icons.check_circle : Icons.chevron_right,
-                color: selected ? AppColors.primary : Colors.grey.shade400,
+                color: selected ? AppColors.primary : colorScheme.onSurfaceVariant,
               ),
             ],
           ),
@@ -281,13 +287,16 @@ class _ContinueButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
-          disabledBackgroundColor: Colors.grey.shade300,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: colorScheme.surfaceContainerHigh,
+          disabledForegroundColor: colorScheme.onSurfaceVariant,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         onPressed: enabled ? onPressed : null,
