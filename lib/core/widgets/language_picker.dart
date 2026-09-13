@@ -11,11 +11,11 @@ class LanguageOption {
 /// contains content for all of these, keyed by language code, so this
 /// list does not depend on which state is selected.
 const List<LanguageOption> kAppLanguages = [
-  LanguageOption('ta', 'தமிழ் (Tamil)'),
+  LanguageOption('ta', 'தமிழ்'),
   LanguageOption('en', 'English'),
-  LanguageOption('ml', 'മലയാళം (Malayalam)'),
-  LanguageOption('te', 'తెలుగు (Telugu)'),
-  LanguageOption('hi', 'हिन्दी (Hindi)'),
+  LanguageOption('ml', 'മലയാളം'),
+  LanguageOption('te', 'తెలుగు'),
+  LanguageOption('hi', 'हिन्दी'),
 ];
 
 /// Shows a bottom-sheet popup card with the 5 supported languages.
@@ -25,13 +25,18 @@ Future<String?> showLanguagePicker(
   BuildContext context, {
   String? currentLanguageCode,
 }) {
+  final colorScheme = Theme.of(context).colorScheme;
   return showModalBottomSheet<String>(
     context: context,
-    backgroundColor: Colors.white,
+    backgroundColor: colorScheme.surface,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
     builder: (context) {
+      // Re-read inside the builder rather than reusing the outer
+      // colorScheme — same theme either way here, but this is the
+      // context that's actually part of the bottom sheet's subtree.
+      final colorScheme = Theme.of(context).colorScheme;
       return SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
@@ -45,14 +50,14 @@ Future<String?> showLanguagePicker(
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: colorScheme.outlineVariant,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
               ),
-              const Text(
+              Text(
                 'Select Language',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colorScheme.onSurface),
               ),
               const SizedBox(height: 16),
               ...kAppLanguages.map((lang) {
@@ -60,7 +65,7 @@ Future<String?> showLanguagePicker(
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Material(
-                    color: selected ? AppColors.primary.withOpacity(0.08) : Colors.white,
+                    color: selected ? AppColors.primary.withOpacity(0.12) : colorScheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(14),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(14),
@@ -70,7 +75,7 @@ Future<String?> showLanguagePicker(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
-                            color: selected ? AppColors.primary : Colors.grey.shade200,
+                            color: selected ? AppColors.primary : colorScheme.outlineVariant,
                             width: selected ? 1.5 : 1,
                           ),
                         ),
@@ -82,7 +87,7 @@ Future<String?> showLanguagePicker(
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                  color: selected ? AppColors.primary : Colors.black87,
+                                  color: selected ? AppColors.primary : colorScheme.onSurface,
                                 ),
                               ),
                             ),
