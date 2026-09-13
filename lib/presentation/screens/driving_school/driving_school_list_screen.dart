@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/ad_banner.dart';
 import '../../../data/models/driving_school_model.dart';
 import '../../../data/repositories/driving_school_repository.dart';
 import '../../providers/app_state_provider.dart';
 import 'driving_school_detail_screen.dart';
 
-const _bg = Color(0xFF0F1115);
-const _card = Color(0xFF1C1F26);
-const _accent = Color(0xFFFFD400);
+enum _SchoolFilter { all, bookmarked }
 
 sealed class _Row {}
 class _SchoolRow extends _Row {
@@ -38,16 +37,10 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
   List<DrivingSchool> _schools = [];
   bool _loading = true;
   bool _locating = false;
-  String _serviceFilter = 'All';
+  _SchoolFilter _filter = _SchoolFilter.all;
   String _areaLabel = '';
 
   static const int _adEveryN = 5;
-  static const _serviceOptions = [
-    'All',
-    'Motor Training Schools For Two Wheeler',
-    'Motor Training Schools For Heavy Vehicle',
-    'Motor Training Schools For Auto Rickshaw',
-  ];
 
   @override
   void initState() {
@@ -63,7 +56,10 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
     final results = await _repo.search(
       stateCode: appState.selectedState ?? 'tamilnadu',
       query: _searchController.text,
-      serviceFilter: _serviceFilter,
+      // Service-type filtering was removed from the UI (All/Bookmarked
+      // only now), so this always requests the unfiltered set; bookmarked
+      // narrows the list client-side below instead.
+      serviceFilter: 'All',
       nearLat: lat,
       nearLng: lng,
     );
@@ -99,10 +95,17 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
     }
   }
 
+  List<DrivingSchool> get _visibleSchools {
+    if (_filter == _SchoolFilter.bookmarked) {
+      return _schools.where((s) => s.isBookmarked).toList();
+    }
+    return _schools;
+  }
+
   List<_Row> get _rows {
     final rows = <_Row>[];
     var since = 0, slot = 0;
-    for (final s in _schools) {
+    for (final s in _visibleSchools) {
       rows.add(_SchoolRow(s));
       if (++since == _adEveryN) {
         rows.add(_AdRow(slot++));
@@ -140,47 +143,24 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppStateProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
     final rows = _rows;
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: _bg,
+        backgroundColor: colorScheme.surface,
         elevation: 0,
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Driving Schools', style: TextStyle(fontSize: 18)),
+            Text('Driving Schools', style: TextStyle(fontSize: 18, color: colorScheme.onSurface)),
             if (_areaLabel.isNotEmpty)
-              Text(_areaLabel, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+              Text(_areaLabel, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
           ],
         ),
-        actions: [
-          DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _serviceFilter,
-              dropdownColor: _card,
-              icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
-              items: _serviceOptions
-                  .map((s) => DropdownMenuItem(
-                        value: s,
-                        child: Text(
-                          s == 'All' ? 'All' : s.replaceFirst('Motor Training Schools For ', ''),
-                          style: const TextStyle(color: Colors.white, fontSize: 13),
-                        ),
-                      ))
-                  .toList(),
-              onChanged: (v) {
-                if (v == null) return;
-                setState(() => _serviceFilter = v);
-                _load();
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
       ),
       body: Column(
         children: [
@@ -191,26 +171,29 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _card,
+                      color: colorScheme.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: TextField(
                       controller: _searchController,
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: colorScheme.onSurface),
                       onSubmitted: (_) => _load(),
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         border: InputBorder.none,
-                        prefixIcon: Icon(Icons.search, color: Colors.grey),
+                        prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant),
                         hintText: 'Search by Name or Area',
-                        hintStyle: TextStyle(color: Colors.grey),
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   child: IconButton(
                     icon: _locating
                         ? const SizedBox(
@@ -218,9 +201,27 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.my_location, color: _accent),
+                        : const Icon(Icons.my_location, color: AppColors.primary),
                     onPressed: _locating ? null : _useMyLocation,
                   ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: 'All',
+                  selected: _filter == _SchoolFilter.all,
+                  onTap: () => setState(() => _filter = _SchoolFilter.all),
+                ),
+                const SizedBox(width: 10),
+                _FilterChip(
+                  label: 'Bookmarked',
+                  selected: _filter == _SchoolFilter.bookmarked,
+                  onTap: () => setState(() => _filter = _SchoolFilter.bookmarked),
                 ),
               ],
             ),
@@ -229,8 +230,14 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : rows.isEmpty
-                    ? const Center(
-                        child: Text('No driving schools found', style: TextStyle(color: Colors.grey)))
+                    ? Center(
+                        child: Text(
+                          _filter == _SchoolFilter.bookmarked
+                              ? 'No bookmarked schools yet'
+                              : 'No driving schools found',
+                          style: TextStyle(color: colorScheme.onSurfaceVariant),
+                        ),
+                      )
                     : ListView.builder(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: rows.length,
@@ -263,6 +270,31 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
   }
 }
 
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _FilterChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      backgroundColor: colorScheme.surfaceContainerHigh,
+      selectedColor: AppColors.primary.withOpacity(0.18),
+      labelStyle: TextStyle(
+        color: selected ? AppColors.primary : colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+      ),
+      side: BorderSide(color: selected ? AppColors.primary : colorScheme.outlineVariant),
+    );
+  }
+}
+
 class _SchoolCard extends StatelessWidget {
   final DrivingSchool school;
   final VoidCallback onTap;
@@ -272,9 +304,13 @@ class _SchoolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
@@ -288,26 +324,26 @@ class _SchoolCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(school.name,
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                        style: TextStyle(
+                            color: colorScheme.onSurface, fontSize: 16, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     Row(children: [
-                      const Icon(Icons.phone, size: 15, color: Colors.grey),
+                      Icon(Icons.phone, size: 15, color: colorScheme.onSurfaceVariant),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(school.phoneNumbers.join(', '),
-                            style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                            style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
                       ),
                     ]),
                     const SizedBox(height: 6),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.location_on, size: 15, color: Colors.grey),
+                        Icon(Icons.location_on, size: 15, color: colorScheme.onSurfaceVariant),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text('${school.address}, ${school.area} - ${school.pincode}',
-                              style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
                         ),
                       ],
                     ),
@@ -319,11 +355,11 @@ class _SchoolCard extends StatelessWidget {
                   IconButton(
                     icon: Icon(
                       school.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: school.isBookmarked ? _accent : Colors.grey,
+                      color: school.isBookmarked ? AppColors.primary : colorScheme.onSurfaceVariant,
                     ),
                     onPressed: onBookmarkToggle,
                   ),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
+                  Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
                 ],
               ),
             ],
