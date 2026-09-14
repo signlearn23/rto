@@ -43,63 +43,42 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _controller.dispose();
     super.dispose();
   }
-
   @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    return Scaffold(
-      backgroundColor: AppColors.primary,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              height: 100,
-              width: width * 0.7,
-              child: AnimatedBuilder(
-                animation: _carPosition,
-                builder: (context, child) {
-                  return Stack(
-                    children: [
-                      Positioned(
-                        bottom: 0,
-                        child: Container(
-                          width: width * 0.7,
-                          height: 3,
-                          color: Colors.white24,
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 6,
-                        left: (width * 0.7 - 60) * _carPosition.value,
-                        child: const Icon(Icons.directions_car_filled,
-                            size: 56, color: Colors.white),
-                      ),
-                    ],
-                  );
-                },
+Widget build(BuildContext context) {
+  final width = MediaQuery.of(context).size.width;
+  return Scaffold(
+    backgroundColor: AppColors.primary,
+    body: Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 180,
+            width: width * 0.8,
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                heightFactor: 0.35,
+                child: Lottie.asset(
+                  'assets/animations/vehicle.json',
+                  fit: BoxFit.fitWidth,
+                  repeat: true,
+                ),
               ),
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'RTO Expert',
-              style: TextStyle(
-                  color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Learn. Practice. Pass.',
-              style: TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-            const SizedBox(height: 32),
-            const SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 24),
+          const Text('RTO Expert', style: TextStyle(
+              color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold, letterSpacing: 1)),
+          const SizedBox(height: 8),
+          const Text('Learn. Practice. Pass.', style: TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 32),
+          const SizedBox(
+            width: 28, height: 28,
+            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
