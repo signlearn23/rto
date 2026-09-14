@@ -64,21 +64,18 @@ class _DrivingSchoolDetailScreenState extends State<DrivingSchoolDetailScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        title: Text(s.name, style: TextStyle(fontSize: 17, color: colorScheme.onSurface)),
-        actions: [
-          IconButton(
-            icon: Icon(
-              s.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              color: s.isBookmarked ? AppColors.primary : colorScheme.onSurface,
-            ),
-            onPressed: () => setState(() => s.isBookmarked = !s.isBookmarked),
-          ),
-        ],
-      ),
+      title: Text(s.name, style: const TextStyle(fontSize: 17)),
+      actions: [
+       IconButton(
+       icon: Icon(
+         s.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+         color: s.isBookmarked ? AppColors.primary : null,
+        ),
+       onPressed: () => setState(() => s.isBookmarked = !s.isBookmarked),
+       ),
+     ],
+   ),
       body: Column(
         children: [
           Expanded(
