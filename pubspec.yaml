@@ -35,3 +35,5 @@ flutter:
     - assets/animation/
     - assets/images/logo.png
     - assets/animation/.gitkeep
+    - assets/sign_bank/
+    - assets/images/signs/
