@@ -5,19 +5,18 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/question_model.dart';
+import '../../../data/models/sign_model.dart';
 import '../../../data/repositories/question_repository.dart';
+import '../../../data/repositories/sign_repository.dart';
 import '../../../data/services/bookmark_store.dart';
 import '../../providers/app_state_provider.dart';
 
 enum _Filter { all, bookmarked }
 
-/// Internal list item: either a numbered question or an ad break.
-/// Kept as one flat list so ListView.builder can render both without
-/// special-casing indices in the build method.
-class _QuestionItem {
+class _NumberedItem<T> {
   final int number;
-  final QuestionModel question;
-  const _QuestionItem(this.number, this.question);
+  final T item;
+  const _NumberedItem(this.number, this.item);
 }
 
 class _AdBreak {
@@ -31,77 +30,130 @@ class QuestionBankScreen extends StatefulWidget {
   State<QuestionBankScreen> createState() => _QuestionBankScreenState();
 }
 
-class _QuestionBankScreenState extends State<QuestionBankScreen> {
-  final _repo = QuestionRepository();
+class _QuestionBankScreenState extends State<QuestionBankScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  final _questionRepo = QuestionRepository();
+  final _signRepo = SignRepository();
   final _random = math.Random();
 
   List<QuestionModel> _allQuestions = [];
-  List<dynamic> _items = []; // _QuestionItem or _AdBreak
-  bool _loading = true;
-  _Filter _filter = _Filter.all;
+  List<SignModel> _allSigns = [];
+  List<dynamic> _questionItems = [];
+  List<dynamic> _signItems = [];
+
+  bool _loadingQuestions = true;
+  bool _loadingSigns = true;
+
+  _Filter _questionFilter = _Filter.all;
+  _Filter _signFilter = _Filter.all;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadQuestions();
+    _loadSigns();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  int _randomGap() => 4 + _random.nextInt(5);
+
+  /// Interleaves ad breaks into a numbered list. Shared by both tabs.
+  List<dynamic> _withAdBreaks<T>(List<T> list) {
+    final items = <dynamic>[];
+    var untilNextAd = _randomGap();
+    for (var i = 0; i < list.length; i++) {
+      items.add(_NumberedItem<T>(i + 1, list[i]));
+      untilNextAd--;
+      if (untilNextAd <= 0 && i != list.length - 1) {
+        items.add(const _AdBreak());
+        untilNextAd = _randomGap();
+      }
+    }
+    return items;
+  }
+
+  Future<void> _loadQuestions() async {
     await BookmarkStore.instance.init();
     final appState = context.read<AppStateProvider>();
-    final grouped = await _repo.groupedByTopic(
+    final grouped = await _questionRepo.groupedByTopic(
       stateCode: appState.selectedState ?? 'tamilnadu',
       languageCode: appState.selectedLanguage ?? 'en',
     );
     if (!mounted) return;
-    setState(() {
-      _allQuestions = grouped.values.expand((qs) => qs).toList();
-      _loading = false;
-    });
-    _rebuildItems();
+    _allQuestions = grouped.values.expand((qs) => qs).toList();
+    setState(() => _loadingQuestions = false);
+    _rebuildQuestionItems();
+  }
+
+  Future<void> _loadSigns() async {
+    await BookmarkStore.instance.init();
+    final appState = context.read<AppStateProvider>();
+    final grouped = await _signRepo.groupedByCategory(
+      stateCode: appState.selectedState ?? 'tamilnadu',
+    );
+    if (!mounted) return;
+    _allSigns = grouped.values.expand((s) => s).toList();
+    setState(() => _loadingSigns = false);
+    _rebuildSignItems();
   }
 
   List<QuestionModel> get _filteredQuestions {
-    if (_filter == _Filter.bookmarked) {
+    if (_questionFilter == _Filter.bookmarked) {
       return _allQuestions.where((q) => BookmarkStore.instance.isBookmarked(q.id)).toList();
     }
     return _allQuestions;
   }
 
-  // Random gap between ads: somewhere between 4 and 8 questions each time
-  // (e.g. 8, then 5, then 6, then 4 ... never the same fixed spacing).
-  int _randomGap() => 4 + _random.nextInt(5);
-
-  void _rebuildItems() {
-    final questions = _filteredQuestions;
-    final items = <dynamic>[];
-    var untilNextAd = _randomGap();
-    for (var i = 0; i < questions.length; i++) {
-      items.add(_QuestionItem(i + 1, questions[i]));
-      untilNextAd--;
-      if (untilNextAd <= 0 && i != questions.length - 1) {
-        items.add(const _AdBreak());
-        untilNextAd = _randomGap();
-      }
+  List<SignModel> get _filteredSigns {
+    if (_signFilter == _Filter.bookmarked) {
+      return _allSigns.where((s) => BookmarkStore.instance.isBookmarked(s.id)).toList();
     }
-    setState(() => _items = items);
+    return _allSigns;
   }
 
-  void _onFilterChanged(_Filter filter) {
-    if (filter == _filter) return;
-    setState(() => _filter = filter);
-    _rebuildItems();
+  void _rebuildQuestionItems() {
+    setState(() => _questionItems = _withAdBreaks(_filteredQuestions));
   }
 
-  Future<void> _onBookmarkToggled(String questionId) async {
-    await BookmarkStore.instance.toggle(questionId);
+  void _rebuildSignItems() {
+    setState(() => _signItems = _withAdBreaks(_filteredSigns));
+  }
+
+  void _onQuestionFilterChanged(_Filter filter) {
+    if (filter == _questionFilter) return;
+    _questionFilter = filter;
+    _rebuildQuestionItems();
+  }
+
+  void _onSignFilterChanged(_Filter filter) {
+    if (filter == _signFilter) return;
+    _signFilter = filter;
+    _rebuildSignItems();
+  }
+
+  Future<void> _onQuestionBookmarkToggled(String id) async {
+    await BookmarkStore.instance.toggle(id);
     if (!mounted) return;
-    // Only need to rebuild the list if the bookmarked filter is active —
-    // un-bookmarking there should drop the card immediately. "All" view
-    // just needs the icon on the card to repaint, which setState below
-    // handles either way.
-    if (_filter == _Filter.bookmarked) {
-      _rebuildItems();
+    if (_questionFilter == _Filter.bookmarked) {
+      _rebuildQuestionItems();
+    } else {
+      setState(() {});
+    }
+  }
+
+  Future<void> _onSignBookmarkToggled(String id) async {
+    await BookmarkStore.instance.toggle(id);
+    if (!mounted) return;
+    if (_signFilter == _Filter.bookmarked) {
+      _rebuildSignItems();
     } else {
       setState(() {});
     }
@@ -109,64 +161,140 @@ class _QuestionBankScreenState extends State<QuestionBankScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Question Bank'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Questions'),
+            Tab(text: 'Traffic Signs'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildQuestionsTab(),
+          _buildSignsTab(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestionsTab() {
     final appState = context.watch<AppStateProvider>();
     final lang = appState.selectedLanguage ?? 'en';
     final bookmarkedCount =
         _allQuestions.where((q) => BookmarkStore.instance.isBookmarked(q.id)).length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Question Bank'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(52),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 10, left: 16, right: 16),
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'All (${_allQuestions.length})',
-                  selected: _filter == _Filter.all,
-                  onTap: () => _onFilterChanged(_Filter.all),
-                ),
-                const SizedBox(width: 10),
-                _FilterChip(
-                  label: 'Bookmarked ($bookmarkedCount)',
-                  selected: _filter == _Filter.bookmarked,
-                  onTap: () => _onFilterChanged(_Filter.bookmarked),
-                ),
-              ],
-            ),
+    if (_loadingQuestions) return const Center(child: CircularProgressIndicator());
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Row(
+            children: [
+              _FilterChip(
+                label: 'All (${_allQuestions.length})',
+                selected: _questionFilter == _Filter.all,
+                onTap: () => _onQuestionFilterChanged(_Filter.all),
+              ),
+              const SizedBox(width: 10),
+              _FilterChip(
+                label: 'Bookmarked ($bookmarkedCount)',
+                selected: _questionFilter == _Filter.bookmarked,
+                onTap: () => _onQuestionFilterChanged(_Filter.bookmarked),
+              ),
+            ],
           ),
         ),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty
+        Expanded(
+          child: _questionItems.isEmpty
               ? Center(
                   child: Text(
-                    _filter == _Filter.bookmarked
+                    _questionFilter == _Filter.bookmarked
                         ? 'No bookmarked questions yet.'
                         : 'No questions available yet for this state/language.',
                   ),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: _items.length,
+                  itemCount: _questionItems.length,
                   itemBuilder: (context, index) {
-                    final item = _items[index];
-                    if (item is _AdBreak) {
-                      return const _BannerAdCard();
-                    }
-                    final questionItem = item as _QuestionItem;
+                    final item = _questionItems[index];
+                    if (item is _AdBreak) return const _BannerAdCard();
+                    final numbered = item as _NumberedItem<QuestionModel>;
                     return _QuestionCard(
-                      number: questionItem.number,
-                      question: questionItem.question,
+                      number: numbered.number,
+                      question: numbered.item,
                       lang: lang,
-                      bookmarked: BookmarkStore.instance.isBookmarked(questionItem.question.id),
-                      onBookmarkToggle: () => _onBookmarkToggled(questionItem.question.id),
+                      bookmarked: BookmarkStore.instance.isBookmarked(numbered.item.id),
+                      onBookmarkToggle: () => _onQuestionBookmarkToggled(numbered.item.id),
                     );
                   },
                 ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSignsTab() {
+    final appState = context.watch<AppStateProvider>();
+    final lang = appState.selectedLanguage ?? 'en';
+    final bookmarkedCount =
+        _allSigns.where((s) => BookmarkStore.instance.isBookmarked(s.id)).length;
+
+    if (_loadingSigns) return const Center(child: CircularProgressIndicator());
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+          child: Row(
+            children: [
+              _FilterChip(
+                label: 'All (${_allSigns.length})',
+                selected: _signFilter == _Filter.all,
+                onTap: () => _onSignFilterChanged(_Filter.all),
+              ),
+              const SizedBox(width: 10),
+              _FilterChip(
+                label: 'Bookmarked ($bookmarkedCount)',
+                selected: _signFilter == _Filter.bookmarked,
+                onTap: () => _onSignFilterChanged(_Filter.bookmarked),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _signItems.isEmpty
+              ? Center(
+                  child: Text(
+                    _signFilter == _Filter.bookmarked
+                        ? 'No bookmarked signs yet.'
+                        : 'No traffic signs available yet for this state.',
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _signItems.length,
+                  itemBuilder: (context, index) {
+                    final item = _signItems[index];
+                    if (item is _AdBreak) return const _BannerAdCard();
+                    final numbered = item as _NumberedItem<SignModel>;
+                    return _SignCard(
+                      number: numbered.number,
+                      sign: numbered.item,
+                      lang: lang,
+                      bookmarked: BookmarkStore.instance.isBookmarked(numbered.item.id),
+                      onBookmarkToggle: () => _onSignBookmarkToggled(numbered.item.id),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
@@ -185,13 +313,13 @@ class _FilterChip extends StatelessWidget {
       label: Text(label),
       selected: selected,
       onSelected: (_) => onTap(),
-      backgroundColor: colorScheme.surface.withOpacity(0.15),
-      selectedColor: colorScheme.surface,
+      backgroundColor: colorScheme.surfaceContainerHighest,
+      selectedColor: colorScheme.primaryContainer,
       labelStyle: TextStyle(
-        color: selected ? colorScheme.primary : colorScheme.surface,
+        color: selected ? colorScheme.onPrimaryContainer : colorScheme.onSurface,
         fontWeight: FontWeight.w600,
       ),
-      side: BorderSide(color: colorScheme.surface.withOpacity(0.6)),
+      side: BorderSide(color: colorScheme.outline.withOpacity(0.6)),
     );
   }
 }
@@ -252,6 +380,13 @@ class _QuestionCardState extends State<_QuestionCard> {
                 ),
               ],
             ),
+            if (q.hasImage) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(q.image!, height: 120, fit: BoxFit.contain),
+              ),
+            ],
             const SizedBox(height: 10),
             ...List.generate(options.length, (i) {
               final isCorrect = i == q.correctIndex;
@@ -295,12 +430,15 @@ class _QuestionCardState extends State<_QuestionCard> {
                 margin: const EdgeInsets.only(top: 4),
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   explanation,
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
                 ),
               ),
           ],
@@ -310,10 +448,132 @@ class _QuestionCardState extends State<_QuestionCard> {
   }
 }
 
-/// A single banner ad slot dropped into the question list. Loads its own
-/// ad independently so a failure in one slot doesn't affect the others,
-/// and collapses to nothing (no reserved blank space) if the ad fails
-/// to load.
+/// Same quiz-card layout as _QuestionCard, but for a sign: the image is
+/// always shown (a sign has no "question without image" mode).
+class _SignCard extends StatefulWidget {
+  final int number;
+  final SignModel sign;
+  final String lang;
+  final bool bookmarked;
+  final VoidCallback onBookmarkToggle;
+
+  const _SignCard({
+    required this.number,
+    required this.sign,
+    required this.lang,
+    required this.bookmarked,
+    required this.onBookmarkToggle,
+  });
+
+  @override
+  State<_SignCard> createState() => _SignCardState();
+}
+
+class _SignCardState extends State<_SignCard> {
+  bool _revealed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.sign;
+    final options = s.optionsFor(widget.lang);
+    final explanation = s.explanationText(widget.lang);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    'S${widget.number}. ${s.questionText(widget.lang)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                ),
+                IconButton(
+                  onPressed: widget.onBookmarkToggle,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(
+                    widget.bookmarked ? Icons.bookmark : Icons.bookmark_border,
+                    color: widget.bookmarked ? Theme.of(context).colorScheme.primary : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(s.image, height: 130, fit: BoxFit.contain),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...List.generate(options.length, (i) {
+              final isCorrect = i == s.correctIndex;
+              final highlight = _revealed && isCorrect;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      highlight ? Icons.check_circle : Icons.circle_outlined,
+                      size: 18,
+                      color: highlight ? Colors.green : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        options[i],
+                        style: TextStyle(
+                          fontWeight: highlight ? FontWeight.w600 : FontWeight.normal,
+                          color: highlight ? Colors.green.shade700 : null,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => setState(() => _revealed = !_revealed),
+                icon: Icon(_revealed ? Icons.visibility_off : Icons.visibility, size: 18),
+                label: Text(_revealed ? 'Hide Answer' : 'Show Answer'),
+              ),
+            ),
+            if (_revealed && explanation != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  explanation,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BannerAdCard extends StatefulWidget {
   const _BannerAdCard();
 
@@ -333,8 +593,6 @@ class _BannerAdCardState extends State<_BannerAdCard> {
 
   void _loadAd() {
     final ad = BannerAd(
-      // Replace with your real AdMob banner ad unit ID, e.g. via
-      // AppConstants.bannerAdUnitId.
       adUnitId: AppConstants.bannerAdUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
