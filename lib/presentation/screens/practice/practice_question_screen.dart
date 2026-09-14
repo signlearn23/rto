@@ -2,15 +2,64 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../../data/models/question_model.dart';
+import '../../../data/models/sign_model.dart';
 import '../../../data/repositories/question_repository.dart';
+import '../../../data/repositories/sign_repository.dart';
 import '../../providers/app_state_provider.dart';
 
 const int _questionsPerAd = 6;
 
+/// Unified view over a QuestionModel or SignModel so the practice flow
+/// can render either without caring which one it is.
+abstract class _PracticeItem {
+  String get id;
+  String? get image;
+  String questionText(String lang);
+  List<String> optionsFor(String lang);
+  int get correctIndex;
+  String? explanationText(String lang);
+}
+
+class _QuestionPracticeItem extends _PracticeItem {
+  final QuestionModel model;
+  _QuestionPracticeItem(this.model);
+
+  @override
+  String get id => model.id;
+  @override
+  String? get image => null;
+  @override
+  String questionText(String lang) => model.questionText(lang);
+  @override
+  List<String> optionsFor(String lang) => model.optionsFor(lang);
+  @override
+  int get correctIndex => model.correctIndex;
+  @override
+  String? explanationText(String lang) => model.explanationText(lang);
+}
+
+class _SignPracticeItem extends _PracticeItem {
+  final SignModel model;
+  _SignPracticeItem(this.model);
+
+  @override
+  String get id => model.id;
+  @override
+  String? get image => model.image;
+  @override
+  String questionText(String lang) => model.questionText(lang);
+  @override
+  List<String> optionsFor(String lang) => model.optionsFor(lang);
+  @override
+  int get correctIndex => model.correctIndex;
+  @override
+  String? explanationText(String lang) => model.explanationText(lang);
+}
+
 sealed class _Slide {}
 class _QuestionSlide extends _Slide {
-  final QuestionModel question;
-  _QuestionSlide(this.question);
+  final _PracticeItem item;
+  _QuestionSlide(this.item);
 }
 class _AdSlide extends _Slide {
   final int slotKey;
@@ -18,7 +67,7 @@ class _AdSlide extends _Slide {
 }
 
 class PracticeQuestionScreen extends StatefulWidget {
-  final String? topic; // null = practice across all topics
+  final String? topic; // null = practice across all topics (questions + signs)
   const PracticeQuestionScreen({super.key, this.topic});
 
   @override
@@ -26,7 +75,8 @@ class PracticeQuestionScreen extends StatefulWidget {
 }
 
 class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
-  final _repo = QuestionRepository();
+  final _questionRepo = QuestionRepository();
+  final _signRepo = SignRepository();
   final _pageController = PageController();
   final Map<int, NativeAd> _loadedAds = {};
   final Set<int> _adLoaded = {};
@@ -48,14 +98,25 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
     final stateCode = appState.selectedState ?? 'tamilnadu';
     final languageCode = appState.selectedLanguage ?? 'en';
 
-    final questions = widget.topic != null
-        ? (await _repo.groupedByTopic(stateCode: stateCode, languageCode: languageCode))[widget.topic] ?? []
-        : await _repo.allQuestions(stateCode: stateCode, languageCode: languageCode);
+    List<_PracticeItem> items;
+    if (widget.topic != null) {
+      final questions =
+          (await _questionRepo.groupedByTopic(stateCode: stateCode, languageCode: languageCode))[widget.topic] ??
+              [];
+      items = questions.map((q) => _QuestionPracticeItem(q)).toList();
+    } else {
+      final questions = await _questionRepo.allQuestions(stateCode: stateCode, languageCode: languageCode);
+      final signs = await _signRepo.loadSigns(stateCode: stateCode);
+      items = [
+        ...questions.map((q) => _QuestionPracticeItem(q)),
+        ...signs.map((s) => _SignPracticeItem(s)),
+      ]..shuffle();
+    }
 
     final slides = <_Slide>[];
     var since = 0, adSlot = 0;
-    for (final q in questions) {
-      slides.add(_QuestionSlide(q));
+    for (final item in items) {
+      slides.add(_QuestionSlide(item));
       if (++since == _questionsPerAd) {
         slides.add(_AdSlide(adSlot++));
         since = 0;
@@ -72,11 +133,11 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
   int get _questionCount => _slides.whereType<_QuestionSlide>().length;
 
   void _selectOption(int slideIndex, int optionIndex) {
-    final q = (_slides[slideIndex] as _QuestionSlide).question;
+    final item = (_slides[slideIndex] as _QuestionSlide).item;
     if (_selectedAt[slideIndex] != null) return;
     setState(() {
       _selectedAt[slideIndex] = optionIndex;
-      if (optionIndex == q.correctIndex) _correct++;
+      if (optionIndex == item.correctIndex) _correct++;
     });
   }
 
@@ -161,10 +222,10 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
               onContinue: () => _goNext(index),
             );
           }
-          final q = (slide as _QuestionSlide).question;
+          final item = (slide as _QuestionSlide).item;
           final questionNumber = _slides.take(index + 1).whereType<_QuestionSlide>().length;
           return _QuestionSlideView(
-            question: q,
+            item: item,
             lang: _lang,
             questionNumber: questionNumber,
             totalQuestions: _questionCount,
@@ -179,7 +240,7 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
 }
 
 class _QuestionSlideView extends StatelessWidget {
-  final QuestionModel question;
+  final _PracticeItem item;
   final String lang;
   final int questionNumber;
   final int totalQuestions;
@@ -188,7 +249,7 @@ class _QuestionSlideView extends StatelessWidget {
   final VoidCallback onNext;
 
   const _QuestionSlideView({
-    required this.question,
+    required this.item,
     required this.lang,
     required this.questionNumber,
     required this.totalQuestions,
@@ -199,13 +260,9 @@ class _QuestionSlideView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // optionCount handles both question types: text options (read via
-    // optionsFor) and sign/image options (optionImages) â€” optionsFor alone
-    // would return an empty list for image-option questions, since those
-    // have no "options" map at all.
-    final options = question.optionsFor(lang);
-    final optionCount = question.optionCount(lang);
-    final explanation = question.explanationText(lang);
+    final options = item.optionsFor(lang);
+    final explanation = item.explanationText(lang);
+    final image = item.image;
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -216,21 +273,21 @@ class _QuestionSlideView extends StatelessWidget {
           const SizedBox(height: 8),
           Text('Question $questionNumber of $totalQuestions', style: const TextStyle(color: Colors.grey)),
           const SizedBox(height: 16),
-          if (question.hasImage)
+          if (image != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Center(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(question.image!, height: 150, fit: BoxFit.contain),
+                  child: Image.asset(image, height: 150, fit: BoxFit.contain),
                 ),
               ),
             ),
-          Text(question.questionText(lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          Text(item.questionText(lang), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 20),
-          ...List.generate(optionCount, (i) {
+          ...List.generate(options.length, (i) {
             final isSelected = selected == i;
-            final isCorrect = i == question.correctIndex;
+            final isCorrect = i == item.correctIndex;
             Color? color;
             if (selected != null) {
               if (isCorrect) color = Colors.green.withOpacity(0.15);
@@ -249,17 +306,7 @@ class _QuestionSlideView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(children: [
-                    Expanded(
-                      child: question.hasImageOptions
-                          ? Center(
-                              child: Image.asset(
-                                question.optionImages![i],
-                                height: 80,
-                                fit: BoxFit.contain,
-                              ),
-                            )
-                          : Text(options[i]),
-                    ),
+                    Expanded(child: Text(options[i])),
                     if (selected != null && isCorrect) const Icon(Icons.check_circle, color: Colors.green),
                     if (selected != null && isSelected && !isCorrect) const Icon(Icons.cancel, color: Colors.red),
                   ]),
@@ -270,7 +317,7 @@ class _QuestionSlideView extends StatelessWidget {
           if (selected != null && explanation != null)
             Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 12),
-              child: Text('ðŸ’¡ $explanation', style: TextStyle(color: Colors.grey.shade700)),
+              child: Text('💡 $explanation', style: TextStyle(color: Colors.grey.shade700)),
             ),
           const Spacer(),
           SizedBox(
