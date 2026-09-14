@@ -163,15 +163,18 @@ class _QuestionBankScreenState extends State<QuestionBankScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Question Bank'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Questions'),
-            Tab(text: 'Traffic Signs'),
-          ],
-        ),
-      ),
+      title: const Text('Question Bank'),
+      bottom: TabBar(
+      controller: _tabController,
+      labelColor: Colors.white,
+      unselectedLabelColor: Colors.white70,
+      indicatorColor: Colors.white,
+      tabs: const [
+        Tab(text: 'Questions'),
+        Tab(text: 'Traffic Signs'),
+      ],
+     ),
+    ),
       body: TabBarView(
         controller: _tabController,
         children: [
