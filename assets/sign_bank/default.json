@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sign_default_001",
+    "category": "Mandatory",
+    "image": "assets/images/signs/no_entry.png",
+    "question": {
+      "en": "What does this sign indicate?"
+    },
+    "options": {
+      "en": ["No Entry", "No Parking", "Speed Limit", "One Way"]
+    },
+    "correctIndex": 0,
+    "explanation": {
+      "en": "This sign means vehicles are not allowed to enter this road."
+    }
+  },
+  {
+    "id": "sign_default_002",
+    "category": "Warning",
+    "image": "assets/images/signs/school_zone.png",
+    "question": {
+      "en": "What does this sign warn drivers about?"
+    },
+    "options": {
+      "en": ["School Zone Ahead", "Hospital Zone", "Pedestrian Crossing", "Railway Crossing"]
+    },
+    "correctIndex": 0,
+    "explanation": {
+      "en": "This sign warns drivers to slow down near a school zone."
+    }
+  }
+]
