@@ -160,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         FeatureCard(
                           icon: Icons.timer_rounded,
                           title: 'Exam Mode',
-                          subtitle: '10 Qs â€¢ 30s each â€¢ 7/10 to pass',
+                          subtitle: '10 Qs - 30s each 7/10 to pass',
                           color: Colors.deepOrange,
                           badge: appState.isAdsRemoved
                               ? 'PRO'
@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           FeatureCard(
                             icon: Icons.block_rounded,
                             title: 'Remove Ads',
-                            subtitle: 'One-time â‚¹39 â€” no ads forever',
+                            subtitle: 'One-time ₹39 no ads forever',
                             color: AppColors.accent,
                             onTap: () => Navigator.of(context)
                                 .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen())),
