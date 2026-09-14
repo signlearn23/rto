@@ -147,21 +147,24 @@ class _DrivingSchoolListScreenState extends State<DrivingSchoolListScreen> {
     final rows = _rows;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: colorScheme.surface,
-        elevation: 0,
-        titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Driving Schools', style: TextStyle(fontSize: 18, color: colorScheme.onSurface)),
-            if (_areaLabel.isNotEmpty)
-              Text(_areaLabel, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      ),
+      titleSpacing: 0,
+      title: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+      const Text('Driving Schools', style: TextStyle(fontSize: 18)),
+        if (_areaLabel.isNotEmpty)
+          Text(
+            _areaLabel,
+            style: TextStyle(
+            fontSize: 13,
+            color: Theme.of(context).appBarTheme.foregroundColor?.withOpacity(0.7),
+          ),
+         ),
+      ],
+   ),
+ ),
       body: Column(
         children: [
           Padding(
