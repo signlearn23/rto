@@ -380,13 +380,6 @@ class _QuestionCardState extends State<_QuestionCard> {
                 ),
               ],
             ),
-            if (q.hasImage) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(q.image!, height: 120, fit: BoxFit.contain),
-              ),
-            ],
             const SizedBox(height: 10),
             ...List.generate(options.length, (i) {
               final isCorrect = i == q.correctIndex;
