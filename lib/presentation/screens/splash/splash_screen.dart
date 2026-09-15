@@ -47,7 +47,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   alignment: Alignment.bottomCenter,
                   heightFactor: 0.35,
                   child: Lottie.asset(
-                    'assets/animations/vehicle.json',
+                    'assets/animation/vehicle.json',
                     fit: BoxFit.fitWidth,
                     repeat: true,
                   ),
