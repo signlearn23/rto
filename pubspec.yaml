@@ -38,4 +38,4 @@ flutter:
     - assets/animation/.gitkeep
     - assets/sign_bank/
     - assets/images/signs/
-    - assets/animations/vehicle.json
+    - assets/animation/vehicle.json
