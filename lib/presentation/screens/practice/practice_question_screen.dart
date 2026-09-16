@@ -174,7 +174,7 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
   NativeAd _adFor(int slotKey) {
     return _loadedAds.putIfAbsent(slotKey, () {
       final ad = NativeAd(
-        adUnitId: 'ca-app-pub-3940256099942544/2247696110', // TODO: your real native ad unit id
+        adUnitId: 'ca-app-pub-3699335518824613/9673004091',
         factoryId: 'advancedNativeAd', // must match the NativeAdFactory registered natively
         listener: NativeAdListener(
           onAdLoaded: (_) => setState(() => _adLoaded.add(slotKey)),
