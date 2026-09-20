@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -106,10 +107,22 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
       items = questions.map((q) => _QuestionPracticeItem(q)).toList();
     } else {
       final questions = await _questionRepo.allQuestions(stateCode: stateCode, languageCode: languageCode);
-      final signs = await _signRepo.loadSigns(stateCode: stateCode);
+
+      // Signs are optional: if they fail to load, practice still works with
+      // questions only. Image-option signs are skipped because this screen
+      // only renders text options.
+      var signs = <SignModel>[];
+      try {
+        signs = await _signRepo.loadSigns(stateCode: stateCode);
+      } catch (e, st) {
+        debugPrint('Practice: sign load failed: $e\n$st');
+      }
+
       items = [
         ...questions.map((q) => _QuestionPracticeItem(q)),
-        ...signs.map((s) => _SignPracticeItem(s)),
+        ...signs
+            .where((s) => !s.hasImageOptions)
+            .map((s) => _SignPracticeItem(s)),
       ]..shuffle();
     }
 
@@ -123,6 +136,7 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _lang = languageCode;
       _slides = slides;
@@ -279,7 +293,12 @@ class _QuestionSlideView extends StatelessWidget {
               child: Center(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(image, height: 150, fit: BoxFit.contain),
+                  child: Image.asset(
+                    image,
+                    height: 150,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 48),
+                  ),
                 ),
               ),
             ),
