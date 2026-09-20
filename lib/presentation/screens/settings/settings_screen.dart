@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../providers/app_state_provider.dart';
 import '../../../core/widgets/language_picker.dart';
 import '../onboarding/state_picker_screen.dart';
@@ -15,6 +16,9 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppStateProvider>();
+    // All visible labels come from `s`, so this screen rebuilds in the new
+    // language as soon as appState.setLanguage() notifies listeners.
+    final s = AppStrings(appState.selectedLanguage ?? 'en');
 
     final langName = kAppLanguages
         .firstWhere(
@@ -24,18 +28,21 @@ class SettingsScreen extends StatelessWidget {
         .displayName;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(s.settingsTitle)),
       body: ListView(
         children: [
           if (!appState.isAdsRemoved)
-            _RemoveAdsBanner(onTap: () => Navigator.of(context)
-                .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen()))),
+            _RemoveAdsBanner(
+              text: s.removeAdsBanner,
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen())),
+            ),
 
-          _SectionHeader('Preferences'),
+          _SectionHeader(s.preferences),
           ListTile(
             leading: const Icon(Icons.map_rounded),
-            title: const Text('Change State'),
-            subtitle: Text(appState.selectedState ?? 'Not set'),
+            title: Text(s.changeState),
+            subtitle: Text(appState.selectedState ?? s.notSet),
             onTap: () async {
               final result = await Navigator.of(context).push<String>(
                 MaterialPageRoute(
@@ -49,7 +56,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.language_rounded),
-            title: const Text('Change Language'),
+            title: Text(s.changeLanguageTitle),
             subtitle: Text(langName),
             onTap: () async {
               final result = await showLanguagePicker(
@@ -63,87 +70,75 @@ class SettingsScreen extends StatelessWidget {
           ),
           SwitchListTile(
             secondary: const Icon(Icons.dark_mode_rounded),
-            title: const Text('Dark Mode'),
+            title: Text(s.darkMode),
             value: appState.isDarkMode,
             onChanged: (v) => appState.setDarkMode(v),
           ),
 
-          _SectionHeader('RTO Resources'),
+          _SectionHeader(s.rtoResources),
           ListTile(
             leading: const Icon(Icons.description_rounded),
-            title: const Text('Download RTO Forms'),
-            subtitle: const Text('Form 1, 4, 5, 6, 8, 20, 21, 22 and more'),
+            title: Text(s.downloadForms),
+            subtitle: Text(s.downloadFormsSub),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const SimpleContentScreen(
-                title: 'RTO Forms',
-                body: 'List and download links for common RTO forms '
-                    '(Form 1 - Medical Certificate, Form 4 - Application for LL, '
-                    'Form 5 - Certificate by driving school, Form 6 - Application for DL, '
-                    'Form 8 - Notice of transfer, Form 20 - Registration application, '
-                    'Form 21 - Sale certificate, Form 22 - Roadworthiness certificate). '
-                    'Hook this screen up to your hosted PDFs.',
+              builder: (_) => SimpleContentScreen(
+                title: s.formsTitle,
+                body: s.formsBody,
               ),
             )),
           ),
           ListTile(
             leading: const Icon(Icons.route_rounded),
-            title: const Text('Driving License Process'),
-            subtitle: const Text('Step-by-step LL & DL procedure'),
+            title: Text(s.licenseProcess),
+            subtitle: Text(s.licenseProcessSub),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const SimpleContentScreen(
-                title: 'Driving License Process',
-                body: '1. Apply for Learner\'s License (LL) online via Sarathi/state portal.\n'
-                    '2. Pass the LL computer-based test (this app helps you prepare!).\n'
-                    '3. LL is valid for 6 months; practice driving during this period.\n'
-                    '4. After 30 days from LL issue, apply for Permanent Driving License (DL).\n'
-                    '5. Attend the RTO driving test slot.\n'
-                    '6. On passing, DL is issued/dispatched to your address.',
+              builder: (_) => SimpleContentScreen(
+                title: s.licenseProcess,
+                body: s.licenseProcessBody,
               ),
             )),
           ),
 
-          _SectionHeader('About'),
+          _SectionHeader(s.about),
           ListTile(
             leading: const Icon(Icons.mail_outline_rounded),
-            title: const Text('Contact Us'),
+            title: Text(s.contactUs),
             onTap: () => launchUrl(Uri.parse('mailto:${AppConstants.contactEmail}')),
           ),
           ListTile(
             leading: const Icon(Icons.share_rounded),
-            title: const Text('Share App'),
+            title: Text(s.shareApp),
             onTap: () => Share.share(AppConstants.shareText),
           ),
+          // Titles are localized; the legal bodies below are still English
+          // until the final text has been reviewed and translated.
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
-            title: const Text('Privacy Policy'),
+            title: Text(s.privacyPolicy),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const SimpleContentScreen(
-                title: 'Privacy Policy',
+              builder: (_) => SimpleContentScreen(
+                title: s.privacyPolicy,
                 body: kPrivacyPolicyBody,
               ),
             )),
           ),
           ListTile(
             leading: const Icon(Icons.gavel_rounded),
-            title: const Text('Terms & Conditions'),
+            title: Text(s.termsAndConditions),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const SimpleContentScreen(
-                title: 'Terms & Conditions',
+              builder: (_) => SimpleContentScreen(
+                title: s.termsAndConditions,
                 body: kTermsAndConditionsBody,
               ),
             )),
           ),
           ListTile(
             leading: const Icon(Icons.info_outline_rounded),
-            title: const Text('Disclaimer'),
+            title: Text(s.disclaimer),
             onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const SimpleContentScreen(
-                title: 'Disclaimer',
-                body: 'This app is an independent study aid for RTO Learning License exam '
-                    'preparation. It is not affiliated with, endorsed by, or connected to any '
-                    'State Transport Department, RTO, or the Government of India. Questions are '
-                    'for practice purposes only and actual exam content may vary. Always refer '
-                    'to official RTO/Sarathi sources for final rules and procedures.',
+              builder: (_) => SimpleContentScreen(
+                title: s.disclaimer,
+                body: kDisclaimerBody,
               ),
             )),
           ),
@@ -153,6 +148,12 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+
+const String kDisclaimerBody = 'This app is an independent study aid for RTO Learning License exam '
+    'preparation. It is not affiliated with, endorsed by, or connected to any '
+    'State Transport Department, RTO, or the Government of India. Questions are '
+    'for practice purposes only and actual exam content may vary. Always refer '
+    'to official RTO/Sarathi sources for final rules and procedures.';
 
 /// NOTE: Placeholder legal text — not drafted or reviewed by a lawyer.
 /// Replace with content reviewed for your actual data practices
@@ -259,8 +260,9 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _RemoveAdsBanner extends StatelessWidget {
+  final String text;
   final VoidCallback onTap;
-  const _RemoveAdsBanner({required this.onTap});
+  const _RemoveAdsBanner({required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -277,9 +279,9 @@ class _RemoveAdsBanner extends StatelessWidget {
           children: [
             const Icon(Icons.block_rounded, color: Colors.white, size: 30),
             const SizedBox(width: 12),
-            const Expanded(
-              child: Text('Remove Ads Forever — just ₹39',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+            Expanded(
+              child: Text(text,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
             ),
             const Icon(Icons.chevron_right, color: Colors.white),
           ],
