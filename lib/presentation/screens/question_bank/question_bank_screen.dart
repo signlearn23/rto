@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:provider/provider.dart';
@@ -81,26 +82,38 @@ class _QuestionBankScreenState extends State<QuestionBankScreen>
   }
 
   Future<void> _loadQuestions() async {
-    await BookmarkStore.instance.init();
-    final appState = context.read<AppStateProvider>();
-    final grouped = await _questionRepo.groupedByTopic(
-      stateCode: appState.selectedState ?? 'tamilnadu',
-      languageCode: appState.selectedLanguage ?? 'en',
-    );
+    try {
+      await BookmarkStore.instance.init();
+      if (!mounted) return;
+      final appState = context.read<AppStateProvider>();
+      final grouped = await _questionRepo.groupedByTopic(
+        stateCode: appState.selectedState ?? 'tamilnadu',
+        languageCode: appState.selectedLanguage ?? 'en',
+      );
+      if (!mounted) return;
+      _allQuestions = grouped.values.expand((qs) => qs).toList();
+    } catch (e, st) {
+      debugPrint('Question load failed: $e\n$st');
+    }
     if (!mounted) return;
-    _allQuestions = grouped.values.expand((qs) => qs).toList();
     setState(() => _loadingQuestions = false);
     _rebuildQuestionItems();
   }
 
   Future<void> _loadSigns() async {
-    await BookmarkStore.instance.init();
-    final appState = context.read<AppStateProvider>();
-    final grouped = await _signRepo.groupedByCategory(
-      stateCode: appState.selectedState ?? 'tamilnadu',
-    );
+    try {
+      await BookmarkStore.instance.init();
+      if (!mounted) return;
+      final appState = context.read<AppStateProvider>();
+      final grouped = await _signRepo.groupedByCategory(
+        stateCode: appState.selectedState ?? 'tamilnadu',
+      );
+      if (!mounted) return;
+      _allSigns = grouped.values.expand((s) => s).toList();
+    } catch (e, st) {
+      debugPrint('Sign load failed: $e\n$st');
+    }
     if (!mounted) return;
-    _allSigns = grouped.values.expand((s) => s).toList();
     setState(() => _loadingSigns = false);
     _rebuildSignItems();
   }
@@ -163,18 +176,18 @@ class _QuestionBankScreenState extends State<QuestionBankScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-      title: const Text('Question Bank'),
-      bottom: TabBar(
-      controller: _tabController,
-      labelColor: Colors.white,
-      unselectedLabelColor: Colors.white70,
-      indicatorColor: Colors.white,
-      tabs: const [
-        Tab(text: 'Questions'),
-        Tab(text: 'Traffic Signs'),
-      ],
-     ),
-    ),
+        title: const Text('Question Bank'),
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          tabs: const [
+            Tab(text: 'Questions'),
+            Tab(text: 'Traffic Signs'),
+          ],
+        ),
+      ),
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -444,8 +457,9 @@ class _QuestionCardState extends State<_QuestionCard> {
   }
 }
 
-/// Same quiz-card layout as _QuestionCard, but for a sign: the image is
-/// always shown (a sign has no "question without image" mode).
+/// Quiz card for a sign. Handles both types:
+///  - image_to_text: the sign image is shown, options are text rows.
+///  - text_to_image: no top image, options are a grid of sign images.
 class _SignCard extends StatefulWidget {
   final int number;
   final SignModel sign;
@@ -503,40 +517,77 @@ class _SignCardState extends State<_SignCard> {
               ],
             ),
             const SizedBox(height: 10),
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.asset(s.image, height: 130, fit: BoxFit.contain),
+            if (s.image != null) ...[
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    s.image!,
+                    height: 130,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 48),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            ...List.generate(options.length, (i) {
-              final isCorrect = i == s.correctIndex;
-              final highlight = _revealed && isCorrect;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      highlight ? Icons.check_circle : Icons.circle_outlined,
-                      size: 18,
-                      color: highlight ? Colors.green : Colors.grey,
+              const SizedBox(height: 10),
+            ],
+            if (s.hasImageOptions)
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: List.generate(s.imageOptions.length, (i) {
+                  final highlight = _revealed && i == s.correctIndex;
+                  return Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: highlight ? Colors.green : Colors.grey.shade300,
+                        width: highlight ? 3 : 1,
+                      ),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        options[i],
-                        style: TextStyle(
-                          fontWeight: highlight ? FontWeight.w600 : FontWeight.normal,
-                          color: highlight ? Colors.green.shade700 : null,
-                        ),
+                    child: Image.asset(
+                      s.imageOptions[i],
+                      height: 80,
+                      width: 80,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const SizedBox(
+                        height: 80,
+                        width: 80,
+                        child: Icon(Icons.broken_image),
                       ),
                     ),
-                  ],
-                ),
-              );
-            }),
+                  );
+                }),
+              )
+            else
+              ...List.generate(options.length, (i) {
+                final isCorrect = i == s.correctIndex;
+                final highlight = _revealed && isCorrect;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        highlight ? Icons.check_circle : Icons.circle_outlined,
+                        size: 18,
+                        color: highlight ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          options[i],
+                          style: TextStyle(
+                            fontWeight: highlight ? FontWeight.w600 : FontWeight.normal,
+                            color: highlight ? Colors.green.shade700 : null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
