@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/localization/app_strings.dart';
 import '../../../core/localization/state_language_map.dart';
 import '../../../core/widgets/custom_card.dart';
 import '../../../core/widgets/ad_banner.dart';
@@ -50,13 +52,13 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _loadingReward = true);
       // Give one short retry if the ad wasn't ready yet.
       await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
       setState(() => _loadingReward = false);
       if (_rewardedAd == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Ad not ready yet, try again in a moment')),
-          );
-        }
+        final s = AppStrings(appState.selectedLanguage ?? 'en');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(s.adNotReady)),
+        );
         _preloadRewardedAd();
         return;
       }
@@ -84,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // showLanguagePicker() is a function that shows its own bottom sheet and
-  // returns the chosen language code (or null if dismissed) â€” it isn't a
+  // returns the chosen language code (or null if dismissed) - it isn't a
   // widget, so it's called directly rather than wrapped in showDialog().
   Future<void> _openLanguagePicker(AppStateProvider appState) async {
     final code = await showLanguagePicker(
@@ -100,15 +102,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppStateProvider>();
     final stateInfo = StateLanguageMap.byCode(appState.selectedState ?? '');
+    // All visible text on this screen comes from `s`, so it rebuilds in the
+    // new language as soon as appState.setLanguage() notifies listeners.
+    final s = AppStrings(appState.selectedLanguage ?? 'en');
 
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        title: Text(stateInfo?.displayName ?? 'RTO Exam'),
+        title: Text(stateInfo?.displayName ?? s.appTitleFallback),
         actions: [
           IconButton(
             icon: const Icon(Icons.language_rounded),
-            tooltip: 'Change language',
+            tooltip: s.changeLanguage,
             onPressed: () => _openLanguagePicker(appState),
           ),
           IconButton(
@@ -128,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Prepare for your Learning License Test',
+                      s.homeHeading,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
@@ -138,20 +143,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       physics: const NeverScrollableScrollPhysics(),
                       mainAxisSpacing: 14,
                       crossAxisSpacing: 14,
-                      childAspectRatio: 0.95,
+                      // Slightly taller cards than before: Tamil/Telugu/
+                      // Malayalam strings wrap onto more lines.
+                      childAspectRatio: 0.85,
                       children: [
                         FeatureCard(
                           icon: Icons.menu_book_rounded,
-                          title: 'Question Bank',
-                          subtitle: 'Browse all topics & signs',
+                          title: s.questionBank,
+                          subtitle: s.questionBankSub,
                           color: Colors.indigo,
                           onTap: () => Navigator.of(context)
                               .push(MaterialPageRoute(builder: (_) => const QuestionBankScreen())),
                         ),
                         FeatureCard(
                           icon: Icons.fitness_center_rounded,
-                          title: 'Practice Mode',
-                          subtitle: 'No time limit, learn at ease',
+                          title: s.practiceMode,
+                          subtitle: s.practiceModeSub,
                           color: Colors.teal,
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const PracticeQuestionScreen(topic: null)),
@@ -159,12 +166,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         FeatureCard(
                           icon: Icons.timer_rounded,
-                          title: 'Exam Mode',
-                          subtitle: '10 Qs - 30s each 7/10 to pass',
+                          title: s.examMode,
+                          subtitle: s.examModeSub(
+                            AppConstants.questionsPerExam,
+                            AppConstants.secondsPerQuestion,
+                            AppConstants.passMarkOutOf10,
+                          ),
                           color: Colors.deepOrange,
                           badge: appState.isAdsRemoved
-                              ? 'PRO'
-                              : (appState.examCredits > 0 ? '${appState.examCredits} left' : 'Watch Ad'),
+                              ? s.badgePro
+                              : (appState.examCredits > 0
+                                  ? s.creditsLeft(appState.examCredits)
+                                  : s.badgeWatchAd),
                           badgeIcon: (!appState.isAdsRemoved && appState.examCredits == 0)
                               ? Icons.play_circle_fill_rounded
                               : null,
@@ -180,16 +193,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         FeatureCard(
                           icon: Icons.bar_chart_rounded,
-                          title: 'Result History',
-                          subtitle: 'Track your past attempts',
+                          title: s.resultHistory,
+                          subtitle: s.resultHistorySub,
                           color: Colors.purple,
                           onTap: () => Navigator.of(context)
                               .push(MaterialPageRoute(builder: (_) => const ResultHistoryScreen())),
                         ),
                         FeatureCard(
                           icon: Icons.school_rounded,
-                          title: 'Driving Schools',
-                          subtitle: 'Find schools near you',
+                          title: s.drivingSchools,
+                          subtitle: s.drivingSchoolsSub,
                           color: Colors.brown,
                           onTap: () => Navigator.of(context)
                               .push(MaterialPageRoute(builder: (_) => const DrivingSchoolListScreen())),
@@ -197,8 +210,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (!appState.isAdsRemoved)
                           FeatureCard(
                             icon: Icons.block_rounded,
-                            title: 'Remove Ads',
-                            subtitle: 'One-time ₹39 no ads forever',
+                            title: s.removeAds,
+                            subtitle: s.removeAdsSub,
                             color: AppColors.accent,
                             onTap: () => Navigator.of(context)
                                 .push(MaterialPageRoute(builder: (_) => const RemoveAdsScreen())),
