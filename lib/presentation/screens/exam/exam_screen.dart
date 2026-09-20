@@ -130,11 +130,9 @@ class _ExamScreenState extends State<ExamScreen> {
           if (q == null) {
             return const Scaffold(body: Center(child: CircularProgressIndicator()));
           }
-          // QuestionModel now stores question/options per language
-          // (Map<String,...>) instead of a flat String/List<String>, so
-          // every place that reads them needs the current language code.
-          final lang = context.watch<AppStateProvider>().selectedLanguage ?? 'en';
-          final questionOptions = q.optionsFor(lang);
+          // `q` is an ExamItem: text and options are already resolved for
+          // the exam's language, and `image` is set for sign questions.
+          final questionOptions = q.options;
           return PopScope(
             canPop: false,
             onPopInvokedWithResult: (didPop, _) async {
@@ -204,12 +202,30 @@ class _ExamScreenState extends State<ExamScreen> {
                                           top: Radius.circular(16),
                                         ),
                                       ),
-                                      child: Text(
-                                        'Q. ${q.questionText(lang)}',
-                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                              fontWeight: FontWeight.w600,
-                                              color: colorScheme.onSurface,
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (q.image != null)
+                                            Center(
+                                              child: Padding(
+                                                padding: const EdgeInsets.only(bottom: 14),
+                                                child: Image.asset(
+                                                  q.image!,
+                                                  height: 140,
+                                                  fit: BoxFit.contain,
+                                                  errorBuilder: (_, __, ___) =>
+                                                      const Icon(Icons.broken_image, size: 48),
+                                                ),
+                                              ),
                                             ),
+                                          Text(
+                                            'Q. ${q.questionText}',
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: colorScheme.onSurface,
+                                                ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     Container(
