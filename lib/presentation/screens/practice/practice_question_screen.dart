@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +11,9 @@ import '../../../data/repositories/sign_repository.dart';
 import '../../providers/app_state_provider.dart';
 
 const int _questionsPerAd = 6;
+
+/// Seconds to wait on an ad slide before the Continue button appears.
+const int _continueDelaySeconds = 5;
 
 /// Unified view over a QuestionModel or SignModel so the practice flow
 /// can render either without caring which one it is.
@@ -58,10 +63,12 @@ class _SignPracticeItem extends _PracticeItem {
 }
 
 sealed class _Slide {}
+
 class _QuestionSlide extends _Slide {
   final _PracticeItem item;
   _QuestionSlide(this.item);
 }
+
 class _AdSlide extends _Slide {
   final int slotKey;
   _AdSlide(this.slotKey);
@@ -206,7 +213,9 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
 
   @override
   void dispose() {
-    for (final ad in _loadedAds.values) ad.dispose();
+    for (final ad in _loadedAds.values) {
+      ad.dispose();
+    }
     _pageController.dispose();
     super.dispose();
   }
@@ -231,6 +240,7 @@ class _PracticeQuestionScreenState extends State<PracticeQuestionScreen> {
           final slide = _slides[index];
           if (slide is _AdSlide) {
             return _AdSlideView(
+              key: ValueKey('ad_${slide.slotKey}'),
               ad: _loadedAds[slide.slotKey] ?? _adFor(slide.slotKey),
               isLoaded: _adLoaded.contains(slide.slotKey),
               onContinue: () => _goNext(index),
@@ -309,8 +319,11 @@ class _QuestionSlideView extends StatelessWidget {
             final isCorrect = i == item.correctIndex;
             Color? color;
             if (selected != null) {
-              if (isCorrect) color = Colors.green.withOpacity(0.15);
-              else if (isSelected) color = Colors.red.withOpacity(0.15);
+              if (isCorrect) {
+                color = Colors.green.withOpacity(0.15);
+              } else if (isSelected) {
+                color = Colors.red.withOpacity(0.15);
+              }
             }
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -352,15 +365,49 @@ class _QuestionSlideView extends StatelessWidget {
   }
 }
 
-class _AdSlideView extends StatelessWidget {
+class _AdSlideView extends StatefulWidget {
   final NativeAd ad;
   final bool isLoaded;
   final VoidCallback onContinue;
 
-  const _AdSlideView({required this.ad, required this.isLoaded, required this.onContinue});
+  const _AdSlideView({
+    super.key,
+    required this.ad,
+    required this.isLoaded,
+    required this.onContinue,
+  });
+
+  @override
+  State<_AdSlideView> createState() => _AdSlideViewState();
+}
+
+class _AdSlideViewState extends State<_AdSlideView> {
+  Timer? _timer;
+  int _secondsLeft = _continueDelaySeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _secondsLeft--);
+      if (_secondsLeft <= 0) t.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final canContinue = _secondsLeft <= 0;
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -369,14 +416,25 @@ class _AdSlideView extends StatelessWidget {
           const Text('A quick break', style: TextStyle(color: Colors.grey)),
           const SizedBox(height: 16),
           Expanded(
-            child: isLoaded
-                ? SizedBox(width: double.infinity, child: AdWidget(ad: ad))
+            child: widget.isLoaded
+                ? SizedBox(width: double.infinity, child: AdWidget(ad: widget.ad))
                 : const Center(child: CircularProgressIndicator()),
           ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(onPressed: onContinue, child: const Text('Continue')),
+            height: 48,
+            child: canContinue
+                ? ElevatedButton(
+                    onPressed: widget.onContinue,
+                    child: const Text('Continue'),
+                  )
+                : Center(
+                    child: Text(
+                      'Continue in $_secondsLeft s',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ),
           ),
         ],
       ),
